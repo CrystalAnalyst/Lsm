@@ -1,8 +1,11 @@
 [package]
-name = "Lsm"
-version = "0.1.0"
 edition = "2021"
+name = "lsm"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+crossbeam-skiplist = "0.1"
+bytes = "1"
+anyhow = "1"
