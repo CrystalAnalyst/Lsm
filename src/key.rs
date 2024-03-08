@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use std::fmt::Debug;
 
 // define the Key.
 pub struct Key<T: AsRef<[u8]>>(T);
@@ -25,5 +26,39 @@ impl<T: AsRef<[u8]>> Key<T> {
 impl<T: AsRef<[u8]> + Clone> Clone for Key<T> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
+    }
+}
+
+impl<T: AsRef<[u8]> + Copy> Copy for Key<T> {}
+
+impl<T: AsRef<[u8]> + Debug> Debug for Key<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl<T: AsRef<[u8]> + Default> Default for Key<T> {
+    fn default() -> Self {
+        Self(T::default())
+    }
+}
+
+impl<T: AsRef<[u8]> + PartialEq> PartialEq for Key<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0)
+    }
+}
+
+impl<T: AsRef<[u8]> + Eq> Eq for Key<T> {}
+
+impl<T: AsRef<[u8]> + PartialOrd> PartialOrd for Key<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<T: AsRef<[u8]> + Ord> Ord for Key<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
     }
 }
