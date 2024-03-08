@@ -62,3 +62,12 @@ impl<T: AsRef<[u8]> + Ord> Ord for Key<T> {
         self.0.cmp(&other.0)
     }
 }
+
+impl Key<Bytes> {
+    pub fn as_key_slice(&self) -> KeySlice {
+        Key(&self.0)
+    }
+    pub fn raw_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
