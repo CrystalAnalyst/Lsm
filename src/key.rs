@@ -79,6 +79,9 @@ impl Key<Vec<u8>> {
     pub fn raw_ref(&self) -> &[u8] {
         self.0.as_ref()
     }
+    pub fn as_key_slice(&self) -> KeySlice {
+        Key(self.0.as_slice())
+    }
 }
 
 impl<'a> Key<&'a [u8]> {

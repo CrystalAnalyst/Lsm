@@ -53,8 +53,15 @@ impl BlockBuilder {
         }
         self.offsets.push(self.data.len() as u16);
         // overlap calculate
-
-        // overlap encode
+        let overlap = compute_overlap(self.first_key.as_key_slice(), key);
+        self.data.put_u16(overlap as u16);
+        self.data.put_u16((key.len() - overlap) as u16);
+        self.data.put(&key.raw_ref()[overlap..]);
+        self.data.put_u16(value.len() as u16);
+        self.data.put(value);
+        if self.first_key.is_empty() {
+            self.first_key = key.to_key_vec();
+        }
         true
     }
 }
