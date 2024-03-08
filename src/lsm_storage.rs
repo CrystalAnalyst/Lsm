@@ -2,12 +2,15 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use crate::mem_table::MemTable;
+use crate::{block::Block, mem_table::MemTable};
 use std::{
     collections::HashMap,
     path::PathBuf,
     sync::{Arc, Mutex, RwLock},
 };
+
+pub type BlockCache = moka::sync::Cache<(usize, usize), Arc<Block>>;
+
 // stores the state of the storage Engine.
 #[derive(Clone)]
 pub struct LsmStroageState {

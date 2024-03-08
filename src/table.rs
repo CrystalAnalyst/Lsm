@@ -2,11 +2,16 @@
 #![allow(dead_code)]
 #![allow(unused_mut)]
 #![allow(unused_imports)]
+pub(crate) mod bloom;
 
-use crate::key::{Key, KeyBytes};
+use self::bloom::Bloom;
+use crate::{
+    key::{Key, KeyBytes},
+    lsm_storage::BlockCache,
+};
 use anyhow::Result;
-use bytes::BufMut;
-use std::{fs::File, io::Read, path::Path};
+use bytes::{Buf, BufMut};
+use std::{fs::File, io::Read, path::Path, sync::Arc};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlockMeta {
@@ -89,4 +94,31 @@ pub struct SsTable {
     id: usize,
     first_key: KeyBytes,
     last_key: KeyBytes,
+    pub(crate) bloom: Option<Bloom>,
+}
+
+impl SsTable {
+    pub fn open(id: usize, block_cache: Option<Arc<BlockCache>>, file: FileObject) -> Result<Self> {
+        let len = file.size();
+        let raw_bloom_offset = file.read(len - 4, 4)?;
+        let bloom_offset = (&raw_bloom_offset[..]).get_u32() as u64;
+        let raw_bloom = file.read(bloom_offset, len - 4 - bloom_offset)?;
+        todo!()
+    }
+
+    pub fn first_key(&self) -> &KeyBytes {
+        &self.first_key
+    }
+    pub fn last_key(&self) -> &KeyBytes {
+        &self.last_key
+    }
+    pub fn num_of_blocks(&self) -> usize {
+        self.block_meta.len()
+    }
+    pub fn table_size(&self) -> u64 {
+        self.file.1
+    }
+    pub fn sst_id(&self) -> usize {
+        self.id
+    }
 }
