@@ -71,3 +71,24 @@ impl Key<Bytes> {
         self.0.as_ref()
     }
 }
+
+impl Key<Vec<u8>> {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+    pub fn raw_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl<'a> Key<&'a [u8]> {
+    pub fn raw_ref(self) -> &'a [u8] {
+        self.0
+    }
+    pub fn to_key_vec(self) -> KeyVec {
+        Key(self.0.to_vec())
+    }
+    pub fn from_slice(slice: &'a [u8]) -> Self {
+        Self(slice)
+    }
+}

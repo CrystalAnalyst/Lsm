@@ -3,6 +3,7 @@
 #![allow(unused_mut)]
 #![allow(unused_imports)]
 pub(crate) mod bloom;
+pub(crate) mod builder;
 
 use self::bloom::Bloom;
 use crate::{
