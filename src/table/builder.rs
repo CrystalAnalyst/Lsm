@@ -1,7 +1,9 @@
+use core::panic;
+
 use bytes::BufMut;
 
 use crate::{
-    block::SIZEOF_U16,
+    block::{Block, SIZEOF_U16},
     key::{KeySlice, KeyVec},
 };
 
@@ -36,9 +38,21 @@ impl BlockBuilder {
             first_key: KeyVec::new(),
         }
     }
+
+    pub fn build(self) -> Block {
+        if self.is_empty() {
+            panic!("block should not be empty!");
+        }
+        Block {
+            data: self.data,
+            offsets: self.offsets,
+        }
+    }
+
     fn estimated_size(&self) -> usize {
         SIZEOF_U16 + self.offsets.len() * SIZEOF_U16 + self.data.len()
     }
+
     pub fn is_empty(&self) -> bool {
         self.offsets.is_empty()
     }
