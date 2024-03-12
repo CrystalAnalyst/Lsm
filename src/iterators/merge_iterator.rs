@@ -1,5 +1,9 @@
+#![allow(unused_variables)]
+#![allow(dead_code)]
+#![allow(unused_imports)]
+
 use super::StorageIterator;
-use std::cmp::{self};
+use std::{cmp, collections::BinaryHeap, fmt::Binary};
 
 struct HeapWrapper<I: StorageIterator>(pub usize, pub Box<I>);
 
@@ -26,5 +30,43 @@ impl<I: StorageIterator> Eq for HeapWrapper<I> {}
 impl<I: StorageIterator> PartialEq for HeapWrapper<I> {
     fn eq(&self, other: &Self) -> bool {
         self.partial_cmp(other).unwrap() == cmp::Ordering::Equal
+    }
+}
+
+pub struct MergeIterator<I: StorageIterator> {
+    iters: BinaryHeap<HeapWrapper<I>>,
+    current: Option<HeapWrapper<I>>,
+}
+
+impl<I: StorageIterator> MergeIterator<I> {
+    pub fn create(iters: Vec<Box<I>>) -> Self {
+        if iters.is_empty() {
+            return Self {
+                iters: BinaryHeap::new(),
+                current: None,
+            };
+        }
+
+        let mut heap = BinaryHeap::new();
+
+        if iters.iter().all(|x| !x.is_valid()) {
+            let mut iters = iters;
+            return Self {
+                iters: heap,
+                current: Some(HeapWrapper(0, iters.pop().unwrap())),
+            };
+        }
+
+        for (idx, iter) in iters.into_iter().enumerate() {
+            if iter.is_valid() {
+                heap.push(HeapWrapper(idx, iter));
+            }
+        }
+
+        let current = heap.pop().unwrap();
+        Self {
+            iters: heap,
+            current: Some(current),
+        }
     }
 }
