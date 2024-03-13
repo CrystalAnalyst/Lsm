@@ -138,4 +138,18 @@ impl<I: 'static + for<'a> StorageIterator<KeyType<'a> = KeySlice<'a>>> StorageIt
         }
         Ok(())
     }
+
+    fn number_of_iterators(&self) -> usize {
+        // provides a count of all active iterators.
+        // including those stored in the `BinaryHeap` and current Iterator.
+        self.iters
+            .iter()
+            .map(|x| x.1.number_of_iterators())
+            .sum::<usize>()
+            + self
+                .current
+                .as_ref()
+                .map(|x| x.1.number_of_iterators())
+                .unwrap_or(0)
+    }
 }
