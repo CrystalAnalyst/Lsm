@@ -83,3 +83,8 @@ impl StorageIterator for LsmIterator {
         self.inner.number_of_iterators()
     }
 }
+
+pub struct FusedIterator<I: StorageIterator> {
+    iter: I,
+    has_error: bool,
+}
