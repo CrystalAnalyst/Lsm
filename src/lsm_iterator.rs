@@ -6,6 +6,7 @@ use anyhow::Ok;
 use anyhow::Result;
 use bytes::Bytes;
 
+use crate::key;
 use crate::{
     iterators::{merge_iterator::MergeIterator, StorageIterator},
     mem_table::MemTableIterator,
@@ -84,7 +85,10 @@ impl StorageIterator for LsmIterator {
     }
 }
 
+// using FusedIterator to wraps the Iter, preventing user bad call.
 pub struct FusedIterator<I: StorageIterator> {
+    //trait I as the inner Type.
     iter: I,
+    // track whether an error occured during Iteration.
     has_error: bool,
 }
