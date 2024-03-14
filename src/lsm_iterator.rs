@@ -2,6 +2,7 @@
 
 use std::{ops::Bound, thread::current};
 
+use anyhow::bail;
 use anyhow::Ok;
 use anyhow::Result;
 use bytes::Bytes;
@@ -91,4 +92,39 @@ pub struct FusedIterator<I: StorageIterator> {
     iter: I,
     // track whether an error occured during Iteration.
     has_error: bool,
+}
+
+impl<I: StorageIterator> StorageIterator for FusedIterator<I> {
+    type KeyType<'a> = I::KeyType<'a> where Self:'a;
+
+    fn is_valid(&self) -> bool {
+        !self.has_error && self.iter.is_valid()
+    }
+
+    fn key(&self) -> Self::KeyType<'_> {
+        if !self.is_valid() {
+            panic!("invalid access to the underlying iterator")
+        }
+        self.iter.key()
+    }
+
+    fn value(&self) -> &[u8] {
+        if !self.is_valid() {
+            panic!("invalid acess to the underlying iterator")
+        }
+        self.iter.value()
+    }
+
+    fn next(&mut self) -> anyhow::Result<()> {
+        if self.has_error {
+            bail!("the iterator is tainted");
+        }
+        if self.iter.is_valid() {
+            if let Err(e) = self.iter.next() {
+                self.has_error = true;
+                return Err(e);
+            }
+        }
+        Ok(())
+    }
 }
