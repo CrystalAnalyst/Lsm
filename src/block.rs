@@ -14,12 +14,16 @@ pub struct Block {
 
 impl Block {
     pub fn encode(&self) -> Bytes {
+        // add data itself.
         let mut buf = self.data.clone();
         let offsets_len = self.offsets.len();
+        // add offset one by one.
         for offset in &self.offsets {
             buf.put_u16(*offset);
         }
+        // add offset_len
         buf.put_u16(offsets_len as u16);
+        // Now buf eqauls: data + offset + #offset(#Elements)
         buf.into()
     }
 
