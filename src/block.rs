@@ -4,6 +4,7 @@
 #![allow(unused_imports)]
 
 use bytes::{Buf, BufMut, Bytes};
+pub mod iterator;
 
 pub(crate) const SIZEOF_U16: usize = std::mem::size_of::<u16>();
 
