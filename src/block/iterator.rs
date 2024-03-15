@@ -113,7 +113,19 @@ impl BlockIterator {
 
     /// find the key (or first greater than the key)
     pub fn seek_to_key(&mut self, key: KeySlice) {
-        todo!()
+        let mut low = 0;
+        let mut high = self.block.offsets.len();
+        while low < high {
+            let mid = low + (high - low) / 2;
+            self.seek_to(mid);
+            assert!(self.is_valid());
+            match self.key().cmp(&key) {
+                std::cmp::Ordering::Less => low = mid + 1,
+                std::cmp::Ordering::Greater => high = mid,
+                std::cmp::Ordering::Equal => return,
+            }
+        }
+        self.seek_to(low)
     }
 
     /// move to next entry.
