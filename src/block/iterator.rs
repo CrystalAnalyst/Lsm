@@ -49,13 +49,15 @@ impl BlockIterator {
     /// constructorOption1: move the cursor to 0.
     pub fn create_and_seek_to_first(block: Arc<Block>) -> Self {
         let mut iter = Self::new(block);
-        // seek to first.
         iter.seek_to_first();
         iter
     }
 
+    /// constructorOption2: move to the appointed key.
     pub fn create_and_seek_to_key(block: Arc<Block>, key: KeySlice) -> Self {
-        todo!()
+        let mut iter = Self::new(block);
+        iter.seek_to_key(key);
+        iter
     }
 
     pub fn key(&self) -> KeySlice {
@@ -75,7 +77,7 @@ impl BlockIterator {
         self.seek_to(0);
     }
 
-    /// seek to a specific index.
+    /// seek to a specific index (the idx is `the ith of the entries `).
     fn seek_to(&mut self, idx: usize) {
         // check boundary.
         if idx >= self.block.offsets.len() {
@@ -130,6 +132,7 @@ impl BlockIterator {
 
     /// move to next entry.
     pub fn next(&mut self) {
-        todo!()
+        self.idx += 1;
+        self.seek_to(self.idx);
     }
 }
