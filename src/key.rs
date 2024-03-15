@@ -76,6 +76,9 @@ impl Key<Vec<u8>> {
     pub fn new() -> Self {
         Self(Vec::new())
     }
+    pub fn from_vec(key: Vec<u8>) -> Self {
+        Self(key)
+    }
     pub fn raw_ref(&self) -> &[u8] {
         self.0.as_ref()
     }
