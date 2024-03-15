@@ -4,7 +4,7 @@ use bytes::Buf;
 use crate::key::{Key, KeySlice, KeyVec};
 use std::sync::Arc;
 
-use super::Block;
+use super::{Block, SIZEOF_U16};
 
 pub struct BlockIterator {
     // reference to the block
@@ -79,7 +79,9 @@ impl BlockIterator {
     fn seek_to(&mut self, idx: usize) {
         // check boundary.
         if idx >= self.block.offsets.len() {
-            todo!()
+            self.key.clear();
+            self.value_range = (0, 0);
+            return;
         }
         // normal process.
         let offset = self.block.offsets[idx] as usize;
@@ -87,9 +89,26 @@ impl BlockIterator {
         self.idx = idx;
     }
 
-    /// move to specified offset
+    /// move to specified offset and update the current key-value pair.
+    /// index update will be handled by calller
     fn seek_to_offset(&mut self, offset: usize) {
-        todo!()
+        // get the entry.
+        let mut entry = &self.block.data[offset..];
+        // get the key (including the prefix)
+        let prefix = entry.get_u16() as usize;
+        let key_len = entry.get_u16() as usize;
+        let key = &entry[..key_len];
+        // update the key
+        self.key.clear();
+        self.key.append(&self.first_key.raw_ref()[..prefix]);
+        self.key.append(key);
+        entry.advance(key_len);
+        // update the value and value range.
+        let value_len = entry.get_u16() as usize;
+        let value_offset_begin = offset + SIZEOF_U16 + SIZEOF_U16 + key_len + SIZEOF_U16;
+        let value_offset_end = value_offset_begin + value_len;
+        self.value_range = (value_offset_begin, value_offset_end);
+        entry.advance(value_len);
     }
 
     /// find the key (or first greater than the key)
