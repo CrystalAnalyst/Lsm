@@ -1,81 +1,41 @@
-use core::panic;
-
-use bytes::BufMut;
-
 use crate::{
-    block::{Block, SIZEOF_U16},
-    key::{KeySlice, KeyVec},
+    block::builder::BlockBuilder,
+    key::{Key, KeySlice, KeyVec},
 };
 
-pub struct BlockBuilder {
-    data: Vec<u8>,
-    offsets: Vec<u16>,
-    block_size: usize,
+use super::BlockMeta;
+
+/// Builds an SsTable from key-value pairs.
+pub struct SsTableBuilder {
+    //
+    builder: BlockBuilder,
+    //
     first_key: KeyVec,
+    last_key: KeyVec,
+    data: Vec<u8>,
+    //
+    pub(crate) meta: Vec<BlockMeta>,
+    block_size: usize,
+    key_hashes: Vec<u32>,
 }
 
-fn compute_overlap(first_key: KeySlice, key: KeySlice) -> usize {
-    let mut i = 0;
-    loop {
-        if i >= first_key.len() || i >= key.len() {
-            break;
-        }
-        if first_key.raw_ref()[i] != key.raw_ref()[i] {
-            break;
-        }
-        i += 1;
-    }
-    i
-}
-
-impl BlockBuilder {
-    /// creates a new block builder
+impl SsTableBuilder {
+    /// constructor
     pub fn new(block_size: usize) -> Self {
         Self {
-            offsets: Vec::new(),
-            data: Vec::new(),
-            block_size,
+            builder: BlockBuilder::new(block_size),
             first_key: KeyVec::new(),
+            last_key: KeyVec::new(),
+            data: Vec::new(),
+            meta: Vec::new(),
+            block_size,
+            key_hashes: Vec::new(),
         }
     }
-
-    pub fn build(self) -> Block {
-        if self.is_empty() {
-            panic!("block should not be empty!");
-        }
-        Block {
-            data: self.data,
-            offsets: self.offsets,
-        }
-    }
-
-    fn estimated_size(&self) -> usize {
-        SIZEOF_U16 + self.offsets.len() * SIZEOF_U16 + self.data.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.offsets.is_empty()
-    }
-
-    #[must_use]
-    pub fn add(&mut self, key: KeySlice, value: &[u8]) -> bool {
-        assert!(!key.is_empty(), "key must not be empty");
-        if self.estimated_size() + key.len() + value.len() + SIZEOF_U16 * 3 > self.block_size
-            && !self.is_empty()
-        {
-            return false;
-        }
-        self.offsets.push(self.data.len() as u16);
-        // overlap calculate
-        let overlap = compute_overlap(self.first_key.as_key_slice(), key);
-        self.data.put_u16(overlap as u16);
-        self.data.put_u16((key.len() - overlap) as u16);
-        self.data.put(&key.raw_ref()[overlap..]);
-        self.data.put_u16(value.len() as u16);
-        self.data.put(value);
+    /// adds a key-value pair to SSTables
+    pub fn add(&mut self, key: KeySlice, value: &[u8]) {
         if self.first_key.is_empty() {
-            self.first_key = key.to_key_vec();
+            self.first_key.set_from_slice(key);
         }
-        true
     }
 }

@@ -10,6 +10,7 @@ use crate::{
     key::{Key, KeyBytes},
     lsm_storage::BlockCache,
 };
+use anyhow::bail;
 use anyhow::Result;
 use bytes::{Buf, BufMut};
 use std::{fs::File, io::Read, path::Path, sync::Arc};
@@ -49,8 +50,27 @@ impl BlockMeta {
         buf.put_u32(crc32fast::hash(&buf[original_len + 4..]));
         assert_eq!(estimated_size, buf.len() - original_len)
     }
+
     pub fn decode_block_meta(mut buf: &[u8]) -> Result<Vec<BlockMeta>> {
-        todo!()
+        let mut block_meta = Vec::new();
+        let num = buf.get_u32() as usize;
+        let checksum = crc32fast::hash(&buf[..buf.remaining() - 4]);
+        for _ in 0..num {
+            let offset = buf.get_u32() as usize;
+            let first_key_len = buf.get_u16() as usize;
+            let first_key = KeyBytes::from_bytes(buf.copy_to_bytes(first_key_len));
+            let last_key_len: usize = buf.get_u16() as usize;
+            let last_key = KeyBytes::from_bytes(buf.copy_to_bytes(last_key_len));
+            block_meta.push(BlockMeta {
+                offset,
+                first_key,
+                last_key,
+            });
+        }
+        if buf.get_u32() != checksum {
+            bail!("meta checksum mismatched");
+        }
+        Ok(block_meta)
     }
 }
 
