@@ -101,6 +101,12 @@ impl Key<Vec<u8>> {
     pub fn append(&mut self, data: &[u8]) {
         self.0.extend(data)
     }
+
+    /// set the key from `a slice` without re-allocating.
+    pub fn set_from_slice(&mut self, key_slice: KeySlice) {
+        self.0.clear();
+        self.0.extend(key_slice.0);
+    }
 }
 
 impl<'a> Key<&'a [u8]> {
