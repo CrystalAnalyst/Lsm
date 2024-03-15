@@ -35,7 +35,42 @@ impl Block {
 }
 
 impl BlockIterator {
+    /// constructor: create a new BlockIteraotr.
     fn new(block: Arc<Block>) -> Self {
+        Self {
+            first_key: block.get_first_key(),
+            key: KeyVec::new(),
+            block,
+            value_range: (0, 0),
+            idx: 0,
+        }
+    }
+
+    /// constructorOption1: move the cursor to 0.
+    pub fn create_and_seek_to_first(block: Arc<Block>) -> Self {
+        let mut iter = Self::new(block);
+        // seek to first.
+        iter.seek_to_first();
+        iter
+    }
+
+    ///
+    pub fn seek_to_first(&mut self) {
+        self.seek_to(0);
+    }
+
+    fn seek_to(&mut self, idx: usize) {
+        // check boundary.
+        if idx >= self.block.offsets.len() {
+            todo!()
+        }
+        // normal process.
+        let offset = self.block.offsets[idx] as usize;
+        self.seek_to_offset(offset);
+        self.idx = idx;
+    }
+
+    fn seek_to_offset(&mut self, offset: usize) {
         todo!()
     }
 }
