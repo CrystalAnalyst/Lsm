@@ -51,7 +51,7 @@ pub struct LsmStorageOptions {
 /// the core data-structure of LsmStorage Engine.
 /// only visible inside the crate.
 pub(crate) struct LsmStorageInner {
-    // lock for concurrent R/w.
+    // lock the state for concurrent R/w.
     pub(crate) state: Arc<RwLock<Arc<LsmStroageState>>>,
     // lock for sync.
     pub(crate) state_lock: Mutex<()>,

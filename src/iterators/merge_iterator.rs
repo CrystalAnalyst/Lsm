@@ -12,41 +12,63 @@ use std::{
     fmt::Binary,
 };
 
+/// HeapWrapper wraps `an item from a storage iterator` along with its index.
+/// usize : represents the index of the Item.
+/// Box<I>: represents the `boxed storage iterator`.
 struct HeapWrapper<I: StorageIterator>(pub usize, pub Box<I>);
 
+/// PartialOrd: allows comparing Instances of `HeapWrapper` for partial ordering.
 impl<I: StorageIterator> PartialOrd for HeapWrapper<I> {
     #[allow(clippy::non_canonical_partial_ord_impl)]
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         match self.1.key().cmp(&other.1.key()) {
+            // smaller keys are of higher priority (min-heap).
             cmp::Ordering::Greater => Some(cmp::Ordering::Greater),
             cmp::Ordering::Less => Some(cmp::Ordering::Less),
+            // if the key is the same, compare the index (the insertion order).
             cmp::Ordering::Equal => self.0.partial_cmp(&other.0),
         }
         .map(|x| x.reverse())
     }
 }
 
+/// Ord: provides a total ordering for instances of `HeapWrapper`
+/// Used when you need strict ordering of elements.
+/// Ord is Necessary for types that implment `PartialOrd`.
 impl<I: StorageIterator> Ord for HeapWrapper<I> {
+    // here simply delegates to the `partial_cmp()` method.
+    // just Unwrap the `Option` to get the Ordering.
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.partial_cmp(other).unwrap()
     }
 }
 
+/// Eq: states that instances of `HeapWrapper` are equatable.
+/// automatically impl when `PartialEq` is impl.
 impl<I: StorageIterator> Eq for HeapWrapper<I> {}
 
+/// PartialEq: allows comparing instances of `HeapWrapper` for equality.
 impl<I: StorageIterator> PartialEq for HeapWrapper<I> {
+    // delegates to `partial_cmp()` and check the result is `Ordering::Equal`.
     fn eq(&self, other: &Self) -> bool {
         self.partial_cmp(other).unwrap() == cmp::Ordering::Equal
     }
 }
-
+/// MergeIterator Merges multiple storage Iterators.
 pub struct MergeIterator<I: StorageIterator> {
+    // A binaryHeap of `HeapWrapper<I>` instances.
+    // this heap maintains the iterators to be merged.
     iters: BinaryHeap<HeapWrapper<I>>,
+    // an optional HeapWrapper<I> representing the current iterator.
     current: Option<HeapWrapper<I>>,
 }
 
 impl<I: StorageIterator> MergeIterator<I> {
+    /// a constructor method for creating a MergeIterator.
+    /// takes a vector of boxed Storage iterators `iters`
+    /// and return a new Instance of MergeIterator.
     pub fn create(iters: Vec<Box<I>>) -> Self {
+        // if iter is empty, returns an empty `MergeIterator`.
         if iters.is_empty() {
             return Self {
                 iters: BinaryHeap::new(),
@@ -56,6 +78,8 @@ impl<I: StorageIterator> MergeIterator<I> {
 
         let mut heap = BinaryHeap::new();
 
+        // If all iterators in iters are invalid.
+        // select the last iterator as the current one.
         if iters.iter().all(|x| !x.is_valid()) {
             let mut iters = iters;
             return Self {
@@ -64,12 +88,14 @@ impl<I: StorageIterator> MergeIterator<I> {
             };
         }
 
+        // iterators are valid, pushing them into the binary heap.
         for (idx, iter) in iters.into_iter().enumerate() {
             if iter.is_valid() {
                 heap.push(HeapWrapper(idx, iter));
             }
         }
 
+        // pop the top iterator from the heap and sets it as the current iterator.
         let current = heap.pop().unwrap();
         Self {
             iters: heap,
