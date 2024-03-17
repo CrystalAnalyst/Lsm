@@ -104,9 +104,11 @@ impl<I: StorageIterator> MergeIterator<I> {
     }
 }
 
+/// impl StorageIterator for MergeIterator for general purpose.
 impl<I: 'static + for<'a> StorageIterator<KeyType<'a> = KeySlice<'a>>> StorageIterator
     for MergeIterator<I>
 {
+    // appoint the keyType.
     type KeyType<'a> = KeySlice<'a>;
 
     fn key(&self) -> KeySlice {
