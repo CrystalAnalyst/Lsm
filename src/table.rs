@@ -3,7 +3,7 @@ pub(crate) mod bloom;
 pub(crate) mod builder;
 
 use self::bloom::Bloom;
-use crate::block::Block;
+use crate::block::{self, Block};
 use crate::key::{Key, KeyBytes, KeySlice};
 use crate::lsm_storage::BlockCache;
 use anyhow::anyhow;
@@ -213,7 +213,8 @@ impl SsTable {
         }
     }
 
-    /// Find the block that many contain `Key`
+    /// Find the index of the block that many contain `Key`
+    /// key: the Key to search for, usize: the index of the block.
     pub fn find_block_idx(&self, key: KeySlice) -> usize {
         self.block_meta
             .partition_point(|meta| meta.first_key.as_key_slice() <= key)
