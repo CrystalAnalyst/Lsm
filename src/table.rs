@@ -1,15 +1,10 @@
-#![allow(unused_variables)]
-#![allow(dead_code)]
-#![allow(unused_mut)]
-#![allow(unused_imports)]
+#![allow(unused)]
 pub(crate) mod bloom;
 pub(crate) mod builder;
 
 use self::bloom::Bloom;
-use crate::{
-    key::{Key, KeyBytes},
-    lsm_storage::BlockCache,
-};
+use crate::key::{Key, KeyBytes};
+use crate::lsm_storage::BlockCache;
 use anyhow::bail;
 use anyhow::Result;
 use bytes::{Buf, BufMut};
@@ -108,23 +103,52 @@ impl FileObject {
     }
 }
 
+/// An SSTable is a file format used for storing key-value pairs sorted by keys.
 pub struct SsTable {
+    // the actual storage unit of SsTable.
     pub(crate) file: FileObject,
+    // the meda blocks that hold info for data blocks.
     pub(crate) block_meta: Vec<BlockMeta>,
+    // the offset that indicates the start point of meta blocks in `file`.
     pub(crate) block_meta_offset: usize,
     id: usize,
+    block_cache: Option<Arc<BlockCache>>,
     first_key: KeyBytes,
     last_key: KeyBytes,
     pub(crate) bloom: Option<Bloom>,
 }
 
 impl SsTable {
+    /// `open()` is responsible for opening an SSTable from a file.
+    /// this function reads the necessary metadata from the file,
+    /// including the Bloom filter and constructs an `SSTable` object.
+    /// id : an identifier for the SSTable
+    /// block_cache: Optional, used to store blocks of data read from the SSTable file.
+    /// file : the file object representing the SSTable file.
     pub fn open(id: usize, block_cache: Option<Arc<BlockCache>>, file: FileObject) -> Result<Self> {
+        // Read metadata.
         let len = file.size();
         let raw_bloom_offset = file.read(len - 4, 4)?;
         let bloom_offset = (&raw_bloom_offset[..]).get_u32() as u64;
         let raw_bloom = file.read(bloom_offset, len - 4 - bloom_offset)?;
-        todo!()
+        let bloom_filter = Bloom::decode(&raw_bloom)?;
+        // read block metadata.
+        let raw_meta_offset = file.read(bloom_offset - 4, 4)?;
+        let block_meta_offset = (&raw_meta_offset[..]).get_u32() as u64;
+        let raw_meta = file.read(block_meta_offset, bloom_offset - 4 - block_meta_offset)?;
+        let block_meta = BlockMeta::decode_block_meta(&raw_meta[..])?;
+        // construct SSTable Object.
+        Ok(Self {
+            file,
+            first_key: block_meta.first().unwrap().first_key.clone(),
+            last_key: block_meta.last().unwrap().last_key.clone(),
+            block_meta,
+            block_meta_offset: block_meta_offset as usize,
+            id,
+            block_cache,
+            bloom: Some(bloom_filter),
+            // todo : add timestamp.
+        })
     }
 
     pub fn first_key(&self) -> &KeyBytes {
