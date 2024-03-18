@@ -2,11 +2,14 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
+use anyhow::Result;
+use bytes::Bytes;
+
 use crate::{block::Block, mem_table::MemTable};
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{Arc, Mutex, RwLock},
+    sync::{atomic::AtomicUsize, Arc, Mutex, RwLock},
 };
 
 /// BlockCache for `read block from disk`, this is used when SSTable is built.
@@ -55,11 +58,104 @@ pub(crate) struct LsmStorageInner {
     pub(crate) state: Arc<RwLock<Arc<LsmStroageState>>>,
     // lock for sync.
     pub(crate) state_lock: Mutex<()>,
-    // the path.
+    // the path to the storage location on the file system.
     path: PathBuf,
+    // cache data blocks read from the storage(disk)
+    pub(crate) block_cache: Arc<BlockCache>,
+    // generate unique ids for SSTables.
+    next_sst_id: AtomicUsize,
+    // configuration settings control the behavior of LSM Tree
+    pub(crate) options: Arc<LsmStorageOptions>,
+    // todo :
+    /*
+        pub(crate) compaction_controller: CompactionController,
+        pub(crate) manifest: Option<Manifest>,
+        #[allow(dead_code)]
+        pub(crate) mvcc: Option<LsmMvccInner>,
+        #[allow(dead_code)]
+        pub(crate) compaction_filters: Arc<Mutex<Vec<CompactionFilter>>>,
+    */
 }
 
-impl LsmStorageInner {}
+impl LsmStorageInner {
+    pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
+        // 1. get the snapshot to ensure consistency.
+        let snapshot = {
+            let guard = self.state.read();
+            Arc::clone(&guard)
+        }; // drop global lock here
+
+        // Search on the current memtable.
+        if let Some(value) = snapshot.memtable.get(key) {
+            if value.is_empty() {
+                // found tomestone, return key not exists
+                return Ok(None);
+            }
+            return Ok(Some(value));
+        }
+
+        // Search on immutable memtables.
+        for memtable in snapshot.imm_memtables.iter() {
+            if let Some(value) = memtable.get(key) {
+                if value.is_empty() {
+                    // found tomestone, return key not exists
+                    return Ok(None);
+                }
+                return Ok(Some(value));
+            }
+        }
+
+        let mut l0_iters = Vec::with_capacity(snapshot.l0_sstables.len());
+
+        let keep_table = |key: &[u8], table: &SsTable| {
+            if key_within(
+                key,
+                table.first_key().as_key_slice(),
+                table.last_key().as_key_slice(),
+            ) {
+                if let Some(bloom) = &table.bloom {
+                    if bloom.may_contain(farmhash::fingerprint32(key)) {
+                        return true;
+                    }
+                } else {
+                    return true;
+                }
+            }
+            false
+        };
+
+        for table in snapshot.l0_sstables.iter() {
+            let table = snapshot.sstables[table].clone();
+            if keep_table(key, &table) {
+                l0_iters.push(Box::new(SsTableIterator::create_and_seek_to_key(
+                    table,
+                    KeySlice::from_slice(key),
+                )?));
+            }
+        }
+        let l0_iter = MergeIterator::create(l0_iters);
+        let mut level_iters = Vec::with_capacity(snapshot.levels.len());
+        for (_, level_sst_ids) in &snapshot.levels {
+            let mut level_ssts = Vec::with_capacity(snapshot.levels[0].1.len());
+            for table in level_sst_ids {
+                let table = snapshot.sstables[table].clone();
+                if keep_table(key, &table) {
+                    level_ssts.push(table);
+                }
+            }
+            let level_iter =
+                SstConcatIterator::create_and_seek_to_key(level_ssts, KeySlice::from_slice(key))?;
+            level_iters.push(Box::new(level_iter));
+        }
+
+        let iter = TwoMergeIterator::create(l0_iter, MergeIterator::create(level_iters))?;
+
+        if iter.is_valid() && iter.key().raw_ref() == key && !iter.value().is_empty() {
+            return Ok(Some(Bytes::copy_from_slice(iter.value())));
+        }
+        Ok(None)
+    }
+}
 
 /// MiniLsm is a wrapper outside the LsmStorageInner, publicly accessible.
 pub struct MiniLsm {
