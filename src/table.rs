@@ -3,10 +3,12 @@ pub(crate) mod bloom;
 pub(crate) mod builder;
 
 use self::bloom::Bloom;
-use crate::key::{Key, KeyBytes};
+use crate::block::Block;
+use crate::key::{Key, KeyBytes, KeySlice};
 use crate::lsm_storage::BlockCache;
-use anyhow::bail;
+use anyhow::anyhow;
 use anyhow::Result;
+use anyhow::{bail, Ok};
 use bytes::{Buf, BufMut};
 use std::{fs::File, io::Read, path::Path, sync::Arc};
 
@@ -109,8 +111,9 @@ pub struct SsTable {
     pub(crate) file: FileObject,
     // the meda blocks that hold info for data blocks.
     pub(crate) block_meta: Vec<BlockMeta>,
-    // the offset that indicates the start point of meta blocks in `file`.
+    // the offset that indicates `the start point of meta blocks` in `file`.
     pub(crate) block_meta_offset: usize,
+    // identifier of the SsTable
     id: usize,
     block_cache: Option<Arc<BlockCache>>,
     first_key: KeyBytes,
@@ -151,18 +154,88 @@ impl SsTable {
         })
     }
 
+    /// create a mock SST with only [first key + last key] metadata.
+    pub fn create_meta_only(
+        id: usize,
+        file_size: u64,
+        first_key: KeyBytes,
+        last_key: KeyBytes,
+    ) -> Self {
+        Self {
+            file: FileObject(None, file_size),
+            block_meta: vec![],
+            block_meta_offset: 0,
+            id,
+            block_cache: None,
+            first_key,
+            last_key,
+            bloom: None,
+        }
+    }
+
+    /// reads a block from the disk based on the given block index.
+    /// block_idx: index of the block to be read.
+    pub fn read_block(&self, block_idx: usize) -> Result<Arc<Block>> {
+        // determines the offset(Start) and length of the block data in the file.
+        let offset = self.block_meta[block_idx].offset;
+        let offset_end = self
+            .block_meta
+            .get(block_idx + 1)
+            .map_or(self.block_meta_offset, |x| x.offset);
+        let block_len = offset_end - offset - 4;
+        // reads the block data along with the checksum from  the file
+        let block_data_with_checksum: Vec<u8> = self
+            .file
+            .read(offset as u64, (offset_end - offset) as u64)?;
+        let block_data = &block_data_with_checksum[..block_len];
+        let checksum = (&block_data_with_checksum[block_len..]).get_u32();
+        // verifies the checksum against the pre-calculated checksum
+        if checksum != crc32fast::hash(block_data) {
+            bail!("block checksum mismatched!");
+        }
+        // decodes the block data and return it as an Arc reference
+        Ok(Arc::new(Block::decode(block_data)))
+    }
+
+    /// Read a block from the disk, with block cache.
+    /// block_idx: index of the block to be read.
+    pub fn read_block_cached(&self, block_idx: usize) -> Result<Arc<Block>> {
+        // Checks if a block cache is available
+        if let Some(ref block_cache) = self.block_cache {
+            // if available, attempts to retrieve the block from the cache.
+            let block = block_cache
+                .try_get_with((self.id, block_idx), || self.read_block(block_idx))
+                .map_err(|e| anyhow!("{}", e))?;
+            Ok(block)
+        } else {
+            // if not, simply reads the block from disk.
+            self.read_block(block_idx)
+        }
+    }
+
+    /// Find the block that many contain `Key`
+    pub fn find_block_idx(&self, key: KeySlice) -> usize {
+        self.block_meta
+            .partition_point(|meta| meta.first_key.as_key_slice() <= key)
+            .saturating_sub(1)
+    }
+
     pub fn first_key(&self) -> &KeyBytes {
         &self.first_key
     }
+
     pub fn last_key(&self) -> &KeyBytes {
         &self.last_key
     }
+
     pub fn num_of_blocks(&self) -> usize {
         self.block_meta.len()
     }
+
     pub fn table_size(&self) -> u64 {
         self.file.1
     }
+
     pub fn sst_id(&self) -> usize {
         self.id
     }
