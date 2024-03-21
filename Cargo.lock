@@ -259,6 +259,8 @@ dependencies = [
  "farmhash",
  "moka",
  "ouroboros",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
