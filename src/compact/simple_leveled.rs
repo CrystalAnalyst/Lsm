@@ -1,4 +1,6 @@
 #![allow(unused)]
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 
 use crate::lsm_storage::LsmStroageState;
@@ -75,6 +77,30 @@ impl SimpleLeveledCompactionController {
         task: &SimpleLeveledCompactionTask,
         output: &[usize],
     ) -> (LsmStroageState, Vec<usize>) {
-        todo!()
+        let mut snapshot = snapshot.clone();
+        let mut files_to_remove = Vec::new();
+        // handle upper-level compaction ( Not L0 )
+        if let Some(upper_level) = task.upper_level {
+            files_to_remove.extend(&snapshot.levels[upper_level - 1].1);
+            snapshot.levels[upper_level - 1].1.clear();
+        } else {
+            // the upper-level is None, so It's L0 compaction.
+            files_to_remove.extend(&task.upper_level_sst_ids);
+            let mut l0_ssts_compacted = task
+                .upper_level_sst_ids
+                .iter()
+                .copied()
+                .collect::<HashSet<_>>();
+            let new_l0_sstables = snapshot
+                .l0_sstables
+                .iter()
+                .copied()
+                .filter(|x| !l0_ssts_compacted.remove(x))
+                .collect::<Vec<_>>();
+            snapshot.l0_sstables = new_l0_sstables;
+        }
+        files_to_remove.extend(&snapshot.levels[task.lower_level - 1].1);
+        snapshot.levels[task.lower_level - 1].1 = output.to_vec();
+        (snapshot, files_to_remove)
     }
 }
