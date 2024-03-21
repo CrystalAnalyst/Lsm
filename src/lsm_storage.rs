@@ -39,6 +39,8 @@ impl LsmStroageState {
             // Init the immu_memtable vector and L0_Sstable vector.
             imm_memtables: Vec::new(),
             l0_sstables: Vec::new(),
+            levels: Vec::new(),
+            sstables: HashMap::new(),
         }
     }
 }
