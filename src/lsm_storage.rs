@@ -5,7 +5,7 @@
 use anyhow::Result;
 use bytes::Bytes;
 
-use crate::{block::Block, compact::CompactionController, mem_table::MemTable, table::SsTable};
+use crate::{block::Block, compact::CompactionOptions, mem_table::MemTable, table::SsTable};
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -25,7 +25,7 @@ pub struct LsmStroageState {
     pub imm_memtables: Vec<Arc<MemTable>>,
     // the L0_SsTables stored in the disk.
     pub l0_sstables: Vec<usize>,
-    // SSTables sorted by key-range : L1 ~ Lmax for compaction
+    // SSTables sorted by key-range : L1(index:0) ~ Lmax for compaction
     pub levels: Vec<(usize, Vec<usize>)>,
     // SST objects : map index(usize) to SST Object(Arc<SsTable>)
     pub sstables: HashMap<usize, Arc<SsTable>>,
@@ -55,7 +55,7 @@ pub struct LsmStorageOptions {
     // configure the max number of memtables.
     pub max_memtable_limit: usize,
     // Compaction option
-    pub compactionOption: CompactionController,
+    pub compaction_option: CompactionOptions,
     // serilization or not
     // open WAL or not
 }
