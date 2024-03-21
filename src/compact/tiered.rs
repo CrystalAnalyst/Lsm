@@ -1,3 +1,13 @@
+#![allow(unused)]
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TieredCompactionTask {
+    pub tiers: Vec<(usize, Vec<usize>)>,
+    pub bottom_tier_included: bool,
+}
+
 pub struct TieredCompactionController {
     options: TieredCompactionOptions,
 }
