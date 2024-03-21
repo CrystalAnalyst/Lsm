@@ -39,7 +39,33 @@ impl LeveledCompactionController {
         sst_ids: &[usize],
         in_level: usize,
     ) -> Vec<usize> {
-        todo!()
+        // 1. Initialization: params -> snapshot, a list of SSTable IDs and level
+        // where the search is conducted.
+        // 2. Find Key Range
+        let begin_key = sst_ids
+            .iter()
+            .map(|id| snapshot.sstables[id].first_key())
+            .min()
+            .cloned()
+            .unwrap();
+        let end_key = sst_ids
+            .iter()
+            .map(|id| snapshot.sstables[id].last_key())
+            .max()
+            .cloned()
+            .unwrap();
+        // 3. Search for Overlapping SSTables
+        let mut overlap_ssts = Vec::new();
+        for sst_id in &snapshot.levels[in_level - 1].1 {
+            let sst = &snapshot.sstables[sst_id];
+            let first_key = sst.first_key();
+            let last_key = sst.last_key();
+            if !(last_key < &begin_key || first_key > &end_key) {
+                overlap_ssts.push(*sst_id);
+            }
+        }
+        // 4. Return
+        overlap_ssts
     }
 
     pub fn generate_compaction_task(
