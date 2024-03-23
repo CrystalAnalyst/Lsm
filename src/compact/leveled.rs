@@ -4,7 +4,7 @@ use std::process::Output;
 
 use serde::{Deserialize, Serialize};
 
-use crate::lsm_storage::LsmStroageState;
+use crate::{compact::leveled, lsm_storage::LsmStroageState};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LeveledCompactionTask {
@@ -98,11 +98,40 @@ impl LeveledCompactionController {
                 base_level = level + 1;
             }
         }
-        
-        // generate compaction task for Both L0 and other levels.
-        
 
-        todo!()
+        // generate compaction task for Both L0 and other levels.
+        if snapshot.l0_sstables.len() >= self.options.level0_files_num_compaction_threshold {
+            return Some(LeveledCompactionTask {
+                upper_level: None,
+                upper_level_ssts_id: snapshot.l0_sstables.clone(),
+                lower_level: base_level,
+                lower_level_ssts_id: self.find_overlaping_ssts(
+                    snapshot,
+                    &snapshot.l0_sstables,
+                    base_level,
+                ),
+                is_lower_level_the_bottom: base_level == self.options.max_levels,
+            });
+        }
+        let mut priority = Vec::with_capacity(self.options.max_levels);
+        for i in (0..self.options.max_levels) {
+            let prio = real_level_sizes[i] as f64 / target_level_sizes[i] as f64;
+            priority.push((prio, i + 1));
+        }
+        priority.sort_by(|a, b| a.partial_cmp(b).unwrap().reverse());
+        let priority = priority.first();
+        if let Some((_, level)) = priority {
+            let level = *level;
+            let select_sst = snapshot.levels[level - 1].1.iter().min().copied().unwrap();
+            return Some(LeveledCompactionTask {
+                upper_level: Some(level),
+                upper_level_ssts_id: vec![select_sst],
+                lower_level: level + 1,
+                lower_level_ssts_id: self.find_overlaping_ssts(snapshot, &[select_sst], level + 1),
+                is_lower_level_the_bottom: level + 1 == self.options.max_levels,
+            });
+        }
+        None
     }
 
     pub fn apply_compaction_result(
