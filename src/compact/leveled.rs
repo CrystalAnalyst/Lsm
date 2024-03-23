@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use std::process::Output;
+use std::{collections::HashSet, process::Output};
 
 use serde::{Deserialize, Serialize};
 
@@ -140,6 +140,68 @@ impl LeveledCompactionController {
         task: &LeveledCompactionTask,
         output: &[usize],
     ) -> (LsmStroageState, Vec<usize>) {
-        todo!()
+        let mut snapshot = snapshot.clone();
+        let mut files_to_remove = Vec::new();
+        let mut upper_level_sst_ids_set = task
+            .upper_level_ssts_id
+            .iter()
+            .copied()
+            .collect::<HashSet<_>>();
+        let mut lower_level_sst_ids_set = task
+            .lower_level_ssts_id
+            .iter()
+            .copied()
+            .collect::<HashSet<_>>();
+        
+        if let Some(upper_level) = task.upper_level {
+            let new_upper_level_ssts = snapshot.levels[upper_level - 1]
+                .1
+                .iter()
+                .filter_map(|x| {
+                    if upper_level_sst_ids_set.remove(x) {
+                        return None;
+                    }
+                    Some(*x)
+                })
+                .collect::<Vec<_>>();
+        } else {
+            let new_l0_ssts = snapshot
+                .l0_sstables
+                .iter()
+                .filter_map(|x| {
+                    if upper_level_sst_ids_set.remove(x) {
+                        return None;
+                    }
+                    Some(*x)
+                })
+                .collect::<Vec<_>>();
+            snapshot.l0_sstables = new_l0_ssts;
+        }
+
+        files_to_remove.extend(&task.upper_level_ssts_id);
+        files_to_remove.extend(&task.lower_level_ssts_id);
+
+        let mut new_lower_level_ssts = snapshot.levels[task.lower_level - 1]
+            .1
+            .iter()
+            .filter_map(|x| {
+                if lower_level_sst_ids_set.remove(x) {
+                    return None;
+                }
+                Some(*x)
+            })
+            .collect::<Vec<_>>();
+
+        new_lower_level_ssts.extend(output);
+        new_lower_level_ssts.sort_by(|x, y| {
+            snapshot
+                .sstables
+                .get(x)
+                .unwrap()
+                .first_key()
+                .cmp(snapshot.sstables.get(y).unwrap().first_key())
+        });
+        snapshot.levels[task.lower_level - 1].1 = new_lower_level_ssts;
+        (snapshot, files_to_remove)
     }
 }
