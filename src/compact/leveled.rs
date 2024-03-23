@@ -72,6 +72,36 @@ impl LeveledCompactionController {
         &self,
         snapshot: &LsmStroageState,
     ) -> Option<LeveledCompactionTask> {
+        // calculate the target size
+        let mut target_level_sizes = (0..self.options.max_levels).map(|_| 0).collect::<Vec<_>>();
+        let mut real_level_sizes = Vec::with_capacity(self.options.max_levels);
+        let mut base_level = self.options.max_levels;
+        for i in 0..self.options.max_levels {
+            real_level_sizes.push(
+                snapshot.levels[i]
+                    .1
+                    .iter()
+                    .map(|id| snapshot.sstables.get(id).unwrap().table_size())
+                    .sum::<u64>() as usize,
+            );
+        }
+        let base_level_size_bytes = self.options.base_level_size_mb * 1024 * 1024;
+        target_level_sizes[self.options.max_levels - 1] =
+            real_level_sizes[self.options.max_levels - 1].max(base_level_size_bytes);
+        for level in (0..self.options.max_levels - 1).rev() {
+            let next_level_size = target_level_sizes[level + 1];
+            let this_level_size = next_level_size / self.options.level_size_multiplier;
+            if next_level_size > base_level_size_bytes {
+                target_level_sizes[level] = this_level_size;
+            }
+            if target_level_sizes[level] > 0 {
+                base_level = level + 1;
+            }
+        }
+        
+        // generate compaction task for Both L0 and other levels.
+        
+
         todo!()
     }
 
