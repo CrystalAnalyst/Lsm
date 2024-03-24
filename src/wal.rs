@@ -3,10 +3,12 @@
 use std::{
     fs::{File, OpenOptions},
     hash::Hasher,
-    io::BufWriter,
+    io::{BufWriter, Write},
     path::Path,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
+
+use parking_lot:: {Mutex}
 
 use anyhow::{bail, Context, Ok, Result};
 
@@ -45,6 +47,13 @@ impl Wal {
     }
 
     pub fn sync(&self) -> Result<()> {
-        todo!()
+        let mut file = self.file.lock();
+        // write buffered data(in the file) to the OS.
+        file.flush()?;
+        // sync_all() further ensures that the changes are
+        // physically written to the storage device.
+        // Necessary especially when OS may cache writes.
+        file.get_mut().sync_all()?;
+        Ok(())
     }
 }
