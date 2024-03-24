@@ -1,8 +1,10 @@
+use bytes::BufMut;
+use parking_lot::{Mutex, MutexGuard};
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
     path::Path,
-    sync::{Arc, Mutex, MutexGuard},
+    sync::Arc,
 };
 
 use crate::compact::CompactionTask;
@@ -51,6 +53,11 @@ impl Manifest {
         let mut file = self.file.lock();
         let mut buf = serde_json::to_vec(&record)?;
         let hash = crc32fast::hash(&buf);
-        todo!()
+        // writing record length and hash to file
+        file.write_all(&(buf.len() as u64).to_be_bytes())?;
+        buf.put_u32(hash);
+        file.write_all(&buf)?;
+        file.sync_all()?;
+        Ok(())
     }
 }

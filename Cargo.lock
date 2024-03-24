@@ -259,6 +259,7 @@ dependencies = [
  "farmhash",
  "moka",
  "ouroboros",
+ "parking_lot",
  "serde",
  "serde_json",
 ]
