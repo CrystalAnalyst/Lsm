@@ -1,5 +1,7 @@
 #![allow(unused)]
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::lsm_storage::LsmStroageState;
@@ -88,6 +90,38 @@ impl TieredCompactionController {
         task: &TieredCompactionTask,
         output: &[usize],
     ) -> (LsmStroageState, Vec<usize>) {
-        todo!()
+        // part1: clone the Sp and Init vars.
+        let mut snapshot = snapshot.clone();
+        let mut tier_to_remove = task
+            .tiers
+            .iter()
+            .map(|(x, y)| (*x, y))
+            .collect::<HashMap<_, _>>();
+        let mut levels = Vec::new();
+        let mut new_tier_added = false;
+        let mut files_to_remove = Vec::new();
+        // part 2
+        // Iterating Through Tiers and Processing
+        for (tier_id, files) in &snapshot.levels {
+            if let Some(ffiles) = tier_to_remove.remove(tier_id) {
+                // the tier should be removed
+                assert_eq!(ffiles, files, "file changed after issuing compaction task");
+                files_to_remove.extend(ffiles.iter().copied());
+            } else {
+                // retain the tier
+                levels.push((*tier_id, files.clone()));
+            }
+            if tier_to_remove.is_empty() && !new_tier_added {
+                // add the compacted tier to the LSM tree
+                new_tier_added = true;
+                levels.push((output[0], output.to_vec()));
+            }
+        }
+        // part3
+        if !tier_to_remove.is_empty() {
+            unreachable!("some tiers not found?");
+        }
+        snapshot.levels = levels;
+        (snapshot, files_to_remove)
     }
 }
