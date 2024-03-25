@@ -57,7 +57,29 @@ impl TieredCompactionController {
         // 2. size ratio check
         let size_ratio_trigger = (100.0 + self.options.size_ratio as f64) / 100.0;
         let mut size = 0;
-        todo!()
+        for id in 0..(snapshot.levels.len() - 1) {
+            size += snapshot.levels[id].1.len();
+            let next_level_size = snapshot.levels[id + 1].1.len();
+            let cur_level_size = size as f64 / next_level_size as f64;
+            if cur_level_size >= size_ratio_trigger && id + 2 >= self.options.min_merge_width {
+                return Some(TieredCompactionTask {
+                    tiers: snapshot
+                        .levels
+                        .iter()
+                        .take(id + 2)
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                    bottom_tier_included: id + 2 >= snapshot.levels.len(),
+                });
+            }
+        }
+        // 3. reduce sorted run compaction
+        let num_iters_to_take = snapshot.levels.len() - self.options.num_of_tiers + 2;
+        println!("compaction triggered  by reducing sorted runs");
+        return Some(TieredCompactionTask {
+            tiers: snapshot.levels.iter().take(2).cloned().collect::<Vec<_>>(),
+            bottom_tier_included: snapshot.levels.len() >= num_iters_to_take,
+        });
     }
 
     pub fn apply_compaction_result(
