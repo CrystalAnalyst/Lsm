@@ -8,7 +8,10 @@ use parking_lot::{Mutex, MutexGuard, RwLock};
 use crate::{
     block::Block,
     compact::{CompactionController, CompactionOptions},
+    iterators::concat_iterator::SstConcatIterator,
     iterators::merge_iterator::MergeIterator,
+    iterators::two_merge_iterator::TwoMergeIterator,
+    iterators::StorageIterator,
     key::KeySlice,
     manifest::Manifest,
     mem_table::MemTable,

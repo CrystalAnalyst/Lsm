@@ -1,9 +1,8 @@
 use anyhow::{Ok, Result};
-use serde_json::de::SliceRead;
 
 use crate::key::KeySlice;
 use crate::table::iterator::SsTableIterator;
-use crate::table::{self, SsTable};
+use crate::table::SsTable;
 
 use std::sync::Arc;
 

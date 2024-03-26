@@ -21,7 +21,7 @@ impl<
             choose_a: false,
         };
         iter.skip_b()?;
-        iter.choose_a = Self::choose_a(&a, &b);
+        iter.choose_a = Self::choose_a(&iter.a, &iter.b);
         Ok(iter)
     }
 
