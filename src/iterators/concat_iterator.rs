@@ -1,4 +1,4 @@
-use anyhow::Ok;
+use anyhow::{Ok, Result};
 
 use crate::key::KeySlice;
 use crate::table::iterator::SsTableIterator;
@@ -31,10 +31,13 @@ impl SstConcatIterator {
     }
 
     /// check the SSTables satisfy the ordering rule or not.
+    /// The vector of SSTs that pass the check is manothonically key-increasing.
     fn check_sst_valid(sstables: &[Arc<SsTable>]) {
+        // Inside:
         for sst in sstables {
             assert!(sst.first_key() <= sst.last_key());
         }
+        // Interactive:
         if !sstables.is_empty() {
             for i in 0..(sstables.len() - 1) {
                 assert!(sstables[i].last_key() < sstables[i + 1].first_key())
@@ -43,8 +46,22 @@ impl SstConcatIterator {
     }
 
     /// move to the next sst until that one is valid.
-    fn move_until_valid(&mut self) {
-        todo!()
+    fn move_until_valid(&mut self) -> Result<()> {
+        while let Some(iter) = self.current.as_mut() {
+            if iter.is_valid() {
+                break;
+            }
+            // If the current sst Iter is not valid, then:
+            if self.next_sst_id >= self.sstables.len() {
+                self.current = None;
+            } else {
+                self.current = Some(SsTableIterator::create_and_seek_to_first(
+                    self.sstables[self.next_sst_id].clone(),
+                )?);
+                self.next_sst_id += 1;
+            }
+        }
+        Ok(())
     }
 }
 
