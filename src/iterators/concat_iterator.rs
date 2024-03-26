@@ -30,9 +30,16 @@ impl SstConcatIterator {
         todo!()
     }
 
-    /// check the sst is valid or not.
+    /// check the SSTables satisfy the ordering rule or not.
     fn check_sst_valid(sstables: &[Arc<SsTable>]) {
-        todo!()
+        for sst in sstables {
+            assert!(sst.first_key() <= sst.last_key());
+        }
+        if !sstables.is_empty() {
+            for i in 0..(sstables.len() - 1) {
+                assert!(sstables[i].last_key() < sstables[i + 1].first_key())
+            }
+        }
     }
 
     /// move to the next sst until that one is valid.
