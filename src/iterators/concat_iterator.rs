@@ -19,6 +19,28 @@ pub struct SstConcatIterator {
     sstables: Vec<Arc<SsTable>>,
 }
 
+impl SstConcatIterator {
+    /// create a new ConcatIterator Instance and move to the first key-value pairs.
+    pub fn create_and_seek_to_first() {
+        todo!()
+    }
+
+    /// create a new ConcatIterator Instance and move to the specified key-value pairs.
+    pub fn create_and_seek_to_key() {
+        todo!()
+    }
+
+    /// check the sst is valid or not.
+    fn check_sst_valid(sstables: &[Arc<SsTable>]) {
+        todo!()
+    }
+
+    /// move to the next sst until that one is valid.
+    fn move_until_valid(&mut self) {
+        todo!()
+    }
+}
+
 impl StorageIterator for SstConcatIterator {
     type KeyType<'a> = KeySlice<'a>;
 
