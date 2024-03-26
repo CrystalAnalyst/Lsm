@@ -131,8 +131,8 @@ impl LsmStorageInner {
         }
 
         // Search in SSTables.
+        // a. L0 SSTables
         let mut l0_iters = Vec::with_capacity(snapshot.l0_sstables.len());
-
         let keep_table = |key: &[u8], table: &SsTable| {
             if key_within(
                 key,
@@ -149,7 +149,6 @@ impl LsmStorageInner {
             }
             false
         };
-
         for table in &snapshot.l0_sstables {
             let table = snapshot.sstables[table].clone();
             if keep_table(key, &table) {
@@ -160,6 +159,7 @@ impl LsmStorageInner {
             }
         }
         let l0_iter = MergeIterator::create(l0_iters);
+        // Higher-Level SSTables.
         let mut level_iters = Vec::with_capacity(snapshot.levels.len());
         for (_, level_sst_ids) in &snapshot.levels {
             let mut level_ssts = Vec::with_capacity(snapshot.levels[0].1.len());
@@ -173,9 +173,9 @@ impl LsmStorageInner {
                 SstConcatIterator::create_and_seek_to_key(level_ssts, KeySlice::from_slice(key))?;
             level_iters.push(Box::new(level_iter));
         }
-
+        // Merge Iteration( merges into a single Iterator )
         let iter = TwoMergeIterator::create(l0_iter, MergeIterator::create(level_iters))?;
-
+        // Key Lookup
         if iter.is_valid() && iter.key().raw_ref() == key && !iter.value().is_empty() {
             return Ok(Some(Bytes::copy_from_slice(iter.value())));
         }
