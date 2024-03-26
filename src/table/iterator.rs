@@ -12,6 +12,32 @@ pub struct SsTableIterator {
     block_idx: usize,
 }
 
+impl SsTableIterator {
+    fn create_and_seek_to_first() {
+        todo!()
+    }
+
+    fn seek_to_first() {
+        todo!()
+    }
+
+    fn seek_to_first_inner() {
+        todo!()
+    }
+
+    fn create_and_seek_to_key() {
+        todo!()
+    }
+
+    fn seek_to_key() {
+        todo!()
+    }
+
+    fn seek_to_key_inner() {
+        todo!()
+    }
+}
+
 impl StorageIterator for SsTableIterator {
     type KeyType<'a> = KeySlice<'a>;
 
