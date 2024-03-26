@@ -1,5 +1,7 @@
 pub mod concat_iterator;
 pub mod merge_iterator;
+pub mod two_merge_iterator;
+
 pub trait StorageIterator {
     // 'a means that the keys may have a Lifetime ited to the iterator itself.
     type KeyType<'a>: PartialEq + Eq + PartialOrd + Ord
