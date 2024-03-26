@@ -182,6 +182,14 @@ impl LsmStorageInner {
         Ok(None)
     }
 
+    pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
+        self.write_batch(&[WriteBatchRecord::Put(key, value)])
+    }
+
+    pub fn delete(&self, key: &[u8]) -> Result<()> {
+        self.write_batch(&[WriteBatchRecord::Del(key)])
+    }
+
     pub fn write_batch<T: AsRef<[u8]>>(&self, batch: &[WriteBatchRecord<T>]) -> Result<()> {
         for record in batch {
             match record {
@@ -203,6 +211,7 @@ impl LsmStorageInner {
                     let size;
                     {
                         let guard = self.state.read();
+                        // put a TombStone on the specified key.
                         guard.memtable.put(key, b"")?;
                         size = guard.memtable.approximate_size();
                     }
