@@ -12,6 +12,7 @@ use crate::{
     key::KeySlice,
     manifest::Manifest,
     mem_table::MemTable,
+    table::iterator::SsTableIterator,
     table::SsTable,
 };
 use std::{

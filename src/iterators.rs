@@ -1,3 +1,4 @@
+pub mod concat_iterator;
 pub mod merge_iterator;
 pub trait StorageIterator {
     // 'a means that the keys may have a Lifetime ited to the iterator itself.

@@ -12,7 +12,7 @@ pub struct SsTableIterator {
 }
 
 impl SsTableIterator {
-    fn create_and_seek_to_first(table: Arc<SsTable>) -> Result<Self> {
+    pub fn create_and_seek_to_first(table: Arc<SsTable>) -> Result<Self> {
         let (block_idx, block_iter) = Self::seek_to_first_inner(&table)?;
         let iter = Self {
             block_iter,
@@ -22,7 +22,7 @@ impl SsTableIterator {
         Ok(iter)
     }
 
-    fn seek_to_first(&mut self) -> Result<()> {
+    pub fn seek_to_first(&mut self) -> Result<()> {
         let (blk_idx, blk_iter) = Self::seek_to_first_inner(&self.table)?;
         self.block_idx = blk_idx;
         self.block_iter = blk_iter;
@@ -36,7 +36,7 @@ impl SsTableIterator {
         ))
     }
 
-    fn create_and_seek_to_key(table: Arc<SsTable>, key: KeySlice) -> Result<Self> {
+    pub fn create_and_seek_to_key(table: Arc<SsTable>, key: KeySlice) -> Result<Self> {
         let (block_idx, block_iter) = Self::seek_to_key_inner(&table, key)?;
         let iter = Self {
             block_idx,
@@ -46,7 +46,7 @@ impl SsTableIterator {
         Ok(iter)
     }
 
-    fn seek_to_key(&mut self, key: KeySlice) -> Result<()> {
+    pub fn seek_to_key(&mut self, key: KeySlice) -> Result<()> {
         let (block_idx, block_iter) = Self::seek_to_key_inner(&self.table, key)?;
         self.block_iter = block_iter;
         self.block_idx = block_idx;
