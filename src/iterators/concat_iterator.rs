@@ -20,9 +20,31 @@ pub struct SstConcatIterator {
 }
 
 impl SstConcatIterator {
-    /// create a new ConcatIterator Instance and move to the first key-value pairs.
-    pub fn create_and_seek_to_first() {
-        todo!()
+    /// create a new ConcatIterator Instance,
+    /// and position it at the begining of the concatenated sequence of SSTs.
+    pub fn create_and_seek_to_first(sstables: Vec<Arc<SsTable>>) -> Result<Self> {
+        // input validation to ensure proper ordering.
+        Self::check_sst_valid(&sstables);
+        // handling Empty SSTables
+        if sstables.is_empty() {
+            return Ok(Self {
+                current: None,
+                next_sst_id: 0,
+                sstables,
+            });
+        }
+        // Init with first SST
+        let mut iter = Self {
+            current: Some(SsTableIterator::create_and_seek_to_first(
+                sstables[0].clone(),
+            )?),
+            next_sst_id: 1,
+            sstables,
+        };
+        // move to the next valid iter
+        iter.move_until_valid()?;
+        // return result
+        Ok(iter)
     }
 
     /// create a new ConcatIterator Instance and move to the specified key-value pairs.
