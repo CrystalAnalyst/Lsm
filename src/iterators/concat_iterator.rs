@@ -1,8 +1,9 @@
 use anyhow::{Ok, Result};
+use serde_json::de::SliceRead;
 
 use crate::key::KeySlice;
 use crate::table::iterator::SsTableIterator;
-use crate::table::SsTable;
+use crate::table::{self, SsTable};
 
 use std::sync::Arc;
 
@@ -48,8 +49,33 @@ impl SstConcatIterator {
     }
 
     /// create a new ConcatIterator Instance and move to the specified key-value pairs.
-    pub fn create_and_seek_to_key() {
-        todo!()
+    pub fn create_and_seek_to_key(sstables: Vec<Arc<SsTable>>, key: KeySlice) -> Result<Self> {
+        // input validation
+        Self::check_sst_valid(&sstables);
+        // determine starting index.
+        let idx: usize = sstables
+            .partition_point(|table| table.first_key().as_key_slice() <= key)
+            .saturating_sub(1);
+        // handle Out-of-Range Key.
+        if idx >= sstables.len() {
+            return Ok(Self {
+                current: None,
+                next_sst_id: sstables.len(),
+                sstables,
+            });
+        }
+        // Init with Specified key.
+        let mut iter = Self {
+            current: Some(SsTableIterator::create_and_seek_to_key(
+                sstables[idx].clone(),
+                key,
+            )?),
+            next_sst_id: idx + 1,
+            sstables,
+        };
+        // move to the next valid iterator.
+        iter.move_until_valid()?;
+        Ok(iter)
     }
 
     /// check the SSTables satisfy the ordering rule or not.
