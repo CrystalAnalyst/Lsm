@@ -103,6 +103,8 @@ pub(crate) struct LsmStorageInner {
 }
 
 impl LsmStorageInner {
+    // CRUD API
+
     pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
         // 1. get the snapshot to ensure consistency.
         let snapshot = {
@@ -182,6 +184,10 @@ impl LsmStorageInner {
         Ok(None)
     }
 
+    pub fn scan() {
+        todo!()
+    }
+
     pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
         self.write_batch(&[WriteBatchRecord::Put(key, value)])
     }
@@ -220,6 +226,66 @@ impl LsmStorageInner {
             }
         }
         Ok(())
+    }
+
+    // Freeze API
+    pub fn force_freeze_memtable() {
+        todo!()
+    }
+
+    fn try_freeze() {
+        todo!()
+    }
+
+    fn freeze_memtable_with_memtable() {
+        todo!()
+    }
+
+    // Flush & Compact API
+    pub fn force_flush_next_imm_memtable() {
+        todo!()
+    }
+
+    pub fn sync() {
+        todo!()
+    }
+
+    pub fn add_compaction_filter() {
+        todo!()
+    }
+
+    // Txn API
+    pub fn new_txn(&self) -> Result<()> {
+        todo!()
+    }
+
+    // Inner util methods or functions
+    pub(crate) fn open() {
+        todo!()
+    }
+
+    pub(crate) fn next_sst_id() {
+        todo!()
+    }
+
+    pub(crate) fn path_of_sst_static() {
+        todo!()
+    }
+
+    pub(crate) fn path_of_sst() {
+        todo!()
+    }
+
+    pub(crate) fn path_of_wal_static() {
+        todo!()
+    }
+
+    pub(crate) fn path_of_wal() {
+        todo!()
+    }
+
+    pub(super) fn sync_dir() {
+        todo!()
     }
 }
 
