@@ -126,6 +126,7 @@ impl LsmStorageInner {
             }
         }
 
+        // Search in SSTables.
         let mut l0_iters = Vec::with_capacity(snapshot.l0_sstables.len());
 
         let keep_table = |key: &[u8], table: &SsTable| {
@@ -145,7 +146,7 @@ impl LsmStorageInner {
             false
         };
 
-        for table in snapshot.l0_sstables.iter() {
+        for table in &snapshot.l0_sstables {
             let table = snapshot.sstables[table].clone();
             if keep_table(key, &table) {
                 l0_iters.push(Box::new(SsTableIterator::create_and_seek_to_key(
