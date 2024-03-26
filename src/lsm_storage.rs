@@ -1,15 +1,23 @@
-#![allow(unused_imports)]
+#![allow(unused)]
 #![allow(dead_code)]
-#![allow(unused_variables)]
 
 use anyhow::Result;
 use bytes::Bytes;
+use parking_lot::{Mutex, MutexGuard, RwLock};
 
-use crate::{block::Block, compact::CompactionOptions, mem_table::MemTable, table::SsTable};
+use crate::{
+    block::Block,
+    compact::{CompactionController, CompactionOptions},
+    iterators::merge_iterator::MergeIterator,
+    key::KeySlice,
+    manifest::Manifest,
+    mem_table::MemTable,
+    table::SsTable,
+};
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{atomic::AtomicUsize, Arc, Mutex, RwLock},
+    sync::{atomic::AtomicUsize, Arc},
 };
 
 /// BlockCache for `read block from disk`, this is used when SSTable is built.
@@ -60,6 +68,15 @@ pub struct LsmStorageOptions {
     // open WAL or not
 }
 
+#[derive(Clone, Debug)]
+pub enum CompactionFilter {
+    Prefix(Bytes),
+}
+
+fn key_within(user_key: &[u8], table_begin: KeySlice, table_end: KeySlice) -> bool {
+    table_begin.raw_ref() <= user_key && user_key <= table_end.raw_ref()
+}
+
 /// the core data-structure of LsmStorage Engine.
 /// only visible inside the crate.
 pub(crate) struct LsmStorageInner {
@@ -75,15 +92,10 @@ pub(crate) struct LsmStorageInner {
     next_sst_id: AtomicUsize,
     // configuration settings control the behavior of LSM Tree
     pub(crate) options: Arc<LsmStorageOptions>,
-    // todo :
-    /*
-        pub(crate) compaction_controller: CompactionController,
-        pub(crate) manifest: Option<Manifest>,
-        #[allow(dead_code)]
-        pub(crate) mvcc: Option<LsmMvccInner>,
-        #[allow(dead_code)]
-        pub(crate) compaction_filters: Arc<Mutex<Vec<CompactionFilter>>>,
-    */
+    pub(crate) compaction_controller: CompactionController,
+    pub(crate) manifest: Option<Manifest>,
+    pub(crate) compaction_filters: Arc<Mutex<Vec<CompactionFilter>>>,
+    // pub(crate) mvcc: Option<LsmMvccInner>,
 }
 
 impl LsmStorageInner {
