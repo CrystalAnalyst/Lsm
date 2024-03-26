@@ -181,6 +181,42 @@ impl LsmStorageInner {
         }
         Ok(None)
     }
+
+    pub fn write_batch<T: AsRef<[u8]>>(&self, batch: &[WriteBatchRecord<T>]) -> Result<()> {
+        for record in batch {
+            match record {
+                WriteBatchRecord::Put(key, value) => {
+                    let key = key.as_ref();
+                    let value = value.as_ref();
+                    assert!(!key.is_empty(), "key should not be emtpy!");
+                    assert!(!value.is_empty(), "value should not be empty!");
+                    let size;
+                    {
+                        let guard = self.state.read();
+                        guard.memtable.put(key, value)?;
+                        size = guard.memtable.approximate_size();
+                    }
+                    todo!()
+                }
+                WriteBatchRecord::Del(key) => {
+                    let key = key.as_ref();
+                    let size;
+                    {
+                        let guard = self.state.read();
+                        guard.memtable.put(key, b"")?;
+                        size = guard.memtable.approximate_size();
+                    }
+                    todo!()
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+pub enum WriteBatchRecord<T: AsRef<[u8]>> {
+    Put(T, T),
+    Del(T),
 }
 
 /// MiniLsm is a wrapper outside the LsmStorageInner, publicly accessible.

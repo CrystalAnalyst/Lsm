@@ -52,6 +52,11 @@ impl MemTable {
             .fetch_add(estimated_size, std::sync::atomic::Ordering::Relaxed);
         Ok(())
     }
+
+    pub fn approximate_size(&self) -> usize {
+        self.approximate_size
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
 }
 
 /// Define a SkipMap Range-Iterator for `Range Query`, like scan() function.
