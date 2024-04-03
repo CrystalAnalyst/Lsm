@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 mod leveled;
 mod simple_leveled;
 mod tiered;
