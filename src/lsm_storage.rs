@@ -20,8 +20,9 @@ use crate::{
 };
 use std::{
     collections::HashMap,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{atomic::AtomicUsize, Arc},
+    usize,
 };
 
 /// BlockCache for `read block from disk`, this is used when SSTable is built.
@@ -103,6 +104,31 @@ pub(crate) struct LsmStorageInner {
 }
 
 impl LsmStorageInner {
+    // Inner util methods or functions
+    pub(crate) fn open(path: impl AsRef<Path>, options: LsmStorageOptions) -> Result<Self> {
+        todo!()
+    }
+
+    pub(crate) fn path_of_sst_static(path: impl AsRef<Path>, id: usize) -> PathBuf {
+        todo!()
+    }
+
+    pub(crate) fn path_of_sst(&self, id: usize) -> PathBuf {
+        todo!()
+    }
+
+    pub(crate) fn path_of_wal_static(path: impl AsRef<Path>, id: usize) -> PathBuf {
+        todo!()
+    }
+
+    pub(crate) fn path_of_wal(&self, id: usize) -> PathBuf {
+        todo!()
+    }
+
+    pub(super) fn sync_dir(&self) -> Result<()> {
+        todo!()
+    }
+
     // CRUD API
     pub fn new_txn(&self) -> Result<()> {
         todo!()
@@ -270,31 +296,6 @@ impl LsmStorageInner {
     }
 
     pub fn add_compaction_filter() {
-        todo!()
-    }
-    
-    // Inner util methods or functions
-    pub(crate) fn open() {
-        todo!()
-    }
-
-    pub(crate) fn path_of_sst_static() {
-        todo!()
-    }
-
-    pub(crate) fn path_of_sst() {
-        todo!()
-    }
-
-    pub(crate) fn path_of_wal_static() {
-        todo!()
-    }
-
-    pub(crate) fn path_of_wal() {
-        todo!()
-    }
-
-    pub(super) fn sync_dir() {
         todo!()
     }
 }
