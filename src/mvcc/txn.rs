@@ -1,3 +1,4 @@
+use std::ops::Bound;
 use std::{
     collections::HashSet,
     sync::{atomic::AtomicBool, Arc},
@@ -5,6 +6,7 @@ use std::{
 
 use bytes::Bytes;
 use crossbeam_skiplist::SkipMap;
+use ouroboros::self_referencing;
 use parking_lot::Mutex;
 
 use crate::lsm_storage::LsmStorageInner;
@@ -37,4 +39,22 @@ impl Transaction {
     pub fn commit() {
         todo!()
     }
+}
+
+impl Drop for Transaction {
+    fn drop(&mut self) {
+        todo!()
+    }
+}
+
+type SkipMapRangeIter<'a> =
+    crossbeam_skiplist::map::Range<'a, Bytes, (Bound<Bytes>, Bound<Bytes>), Bytes, Bytes>;
+
+#[self_referencing]
+pub struct TxnLocalIterator {
+    map: Arc<SkipMap<Bytes, Bytes>>,
+    #[borrows(map)]
+    #[not_covariant]
+    iter: SkipMapRangeIter<'this>,
+    item: (Bytes, Bytes),
 }
