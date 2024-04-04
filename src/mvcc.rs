@@ -1,12 +1,17 @@
 #![allow(unused)]
 #![allow(dead_code)]
 
+pub mod txn;
+pub mod watermark;
+
 use std::{
     collections::{BTreeMap, HashSet},
     sync::Arc,
 };
 
 use parking_lot::Mutex;
+
+use crate::lsm_storage::LsmStorageInner;
 
 pub(crate) struct CommittedTxnData {
     pub(crate) key_hashes: HashSet<u32>,
@@ -22,11 +27,16 @@ pub(crate) struct LsmMvccInner {
 }
 
 impl LsmMvccInner {
-    pub fn new() {
-        todo!()
+    pub fn new(init_ts: u64) -> Self {
+        Self {
+            write_lock: Mutex::new(()),
+            commit_lock: Mutex::new(()),
+            ts: Arc::new(Mutex::new(init_ts)),
+            committed_txns: Arc::new(Mutex::new(BTreeMap::new())),
+        }
     }
 
-    pub fn new_txn() {
+    pub fn new_txn(&self, inner: Arc<LsmStorageInner>, ser: bool) -> Arc<Transaction> {
         todo!()
     }
 
