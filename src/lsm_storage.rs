@@ -104,6 +104,13 @@ pub(crate) struct LsmStorageInner {
 
 impl LsmStorageInner {
     // CRUD API
+    pub fn new_txn(&self) -> Result<()> {
+        todo!()
+    }
+
+    pub fn sync() {
+        todo!()
+    }
 
     pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
         // 1. get the snapshot to ensure consistency.
@@ -184,7 +191,15 @@ impl LsmStorageInner {
         Ok(None)
     }
 
+    pub fn get_with_ts() {
+        todo!()
+    }
+
     pub fn scan() {
+        todo!()
+    }
+
+    pub fn scan_with_ts() {
         todo!()
     }
 
@@ -228,12 +243,16 @@ impl LsmStorageInner {
         Ok(())
     }
 
-    // Freeze API
-    pub fn force_freeze_memtable() {
+    pub fn write_batch_inner() {
         todo!()
     }
 
+    // Memtable Management.
     fn try_freeze() {
+        todo!()
+    }
+
+    pub fn force_freeze_memtable() {
         todo!()
     }
 
@@ -241,30 +260,21 @@ impl LsmStorageInner {
         todo!()
     }
 
-    // Flush & Compact API
     pub fn force_flush_next_imm_memtable() {
         todo!()
     }
 
-    pub fn sync() {
+    // SSTable Management & Optimization
+    pub(crate) fn next_sst_id() {
         todo!()
     }
 
     pub fn add_compaction_filter() {
         todo!()
     }
-
-    // Txn API
-    pub fn new_txn(&self) -> Result<()> {
-        todo!()
-    }
-
+    
     // Inner util methods or functions
     pub(crate) fn open() {
-        todo!()
-    }
-
-    pub(crate) fn next_sst_id() {
         todo!()
     }
 
