@@ -8,6 +8,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     sync::Arc,
 };
+use txn::Transaction;
 
 use parking_lot::Mutex;
 

@@ -9,6 +9,7 @@ use crossbeam_skiplist::SkipMap;
 use ouroboros::self_referencing;
 use parking_lot::Mutex;
 
+use crate::iterators::StorageIterator;
 use crate::lsm_storage::LsmStorageInner;
 
 pub struct Transaction {
@@ -58,3 +59,13 @@ pub struct TxnLocalIterator {
     iter: SkipMapRangeIter<'this>,
     item: (Bytes, Bytes),
 }
+
+impl TxnLocalIterator {}
+
+impl StorageIterator for TxnLocalIterator {}
+
+pub struct TxnIterator {}
+
+impl TxnIterator {}
+
+impl StorageIterator for TxnIterator {}
