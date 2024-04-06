@@ -29,11 +29,18 @@ impl Transaction {
         todo!()
     }
 
-    pub fn put() {
+    pub fn put(&self, key: &[u8], value: &[u8]) {
+        self.local_storage
+            .as_ref()
+            .insert(Bytes::copy_from_slice(key), Bytes::copy_from_slice(value));
+        // batch
         todo!()
     }
 
-    pub fn delete() {
+    pub fn delete(&self, key: &[u8]) {
+        self.local_storage
+            .as_ref()
+            .insert(Bytes::copy_from_slice(key), Bytes::new());
         todo!()
     }
 
