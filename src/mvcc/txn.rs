@@ -30,18 +30,36 @@ impl Transaction {
     }
 
     pub fn put(&self, key: &[u8], value: &[u8]) {
+        // check Txn Status
+        let committed = self.committed.load(std::sync::atomic::Ordering::SeqCst);
+        assert!(
+            !committed,
+            "Cannot operate on Transaction that's committed!"
+        );
+        // Insert or Update key-value pair.
         self.local_storage
-            .as_ref()
             .insert(Bytes::copy_from_slice(key), Bytes::copy_from_slice(value));
-        // batch
-        todo!()
+        // Update Write Set
+        if let Some(key_hashes) = &self.key_hashes {
+            let mut key_hashes = key_hashes.lock();
+            let (write_hash, _) = &mut *key_hashes;
+            write_hash.insert(farmhash::hash32(key));
+        }
     }
 
     pub fn delete(&self, key: &[u8]) {
+        let committed = self.committed.load(std::sync::atomic::Ordering::SeqCst);
+        assert!(
+            !committed,
+            "Cannot operate on Transaction that's committed!"
+        );
         self.local_storage
-            .as_ref()
             .insert(Bytes::copy_from_slice(key), Bytes::new());
-        todo!()
+        if let Some(key_hashes) = self.key_hashes {
+            let mut key_hashes = key_hashes.lock();
+            let (write_hash, _) = &mut *key_hashes;
+            write_hash.insert(farmhash::hash32(key));
+        }
     }
 
     pub fn commit() {
