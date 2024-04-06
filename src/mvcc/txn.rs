@@ -120,9 +120,23 @@ impl TxnLocalIterator {
 
 impl StorageIterator for TxnLocalIterator {
     type KeyType<'a> = &'a [u8];
+
     fn next(&mut self) -> anyhow::Result<()> {
         let entry = self.with_iter_mut(|iter| Self::entry_to_item(iter.next()));
-        
+        self.with_mut(|x| *x.item = entry);
+        Ok(())
+    }
+
+    fn key(&self) -> Self::KeyType<'_> {
+        &self.borrow_item().0[..]
+    }
+
+    fn value(&self) -> &[u8] {
+        &self.borrow_item().1[..]
+    }
+
+    fn is_valid(&self) -> bool {
+        !self.borrow_item().0.is_empty()
     }
 }
 
