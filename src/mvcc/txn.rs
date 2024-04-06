@@ -4,6 +4,7 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
+use anyhow::Result;
 use bytes::Bytes;
 use crossbeam_skiplist::SkipMap;
 use ouroboros::self_referencing;
@@ -21,11 +22,32 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    pub fn get() {
-        todo!()
+    pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
+        // Status check
+        let committed = self.committed.load(std::sync::atomic::Ordering::SeqCst);
+        assert!(
+            !committed,
+            "Cannot operate on Transaction that's committed!"
+        );
+        // check the Read/Write Set of This Txn.
+        if let Some(key_hashes) = &self.key_hashes {
+            let mut key_hash = key_hashes.lock();
+            let (_, read_set) = &mut *key_hash;
+            read_set.insert(farmhash::hash32(key));
+        }
+        // get the actual key-value pair
+        if let Some(entry) = self.local_storage.get(key) {
+            if entry.value().is_empty() {
+                return Ok(None);
+            } else {
+                return Ok(Some(entry.value().clone()));
+            }
+        }
+        // call the underlying `get_with_ts()` method.
+        self.inner.get_with_ts(key, self.read_ts)
     }
 
-    pub fn scan() {
+    pub fn scan(self: &Arc<Self>, lower: Bound<&[u8]>, upper: Bound<&[u8]>) {
         todo!()
     }
 

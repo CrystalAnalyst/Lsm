@@ -229,7 +229,7 @@ impl LsmStorageInner {
         Ok(None)
     }
 
-    pub fn get_with_ts() {
+    pub fn get_with_ts(&self, key: &[u8], ts: u64) -> Result<Option<Bytes>> {
         todo!()
     }
 
