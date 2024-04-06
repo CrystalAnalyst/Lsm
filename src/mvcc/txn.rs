@@ -1,3 +1,4 @@
+use core::borrow;
 use std::ops::Bound;
 use std::{
     collections::HashSet,
@@ -6,6 +7,7 @@ use std::{
 
 use anyhow::Result;
 use bytes::Bytes;
+use crossbeam_skiplist::map::Entry;
 use crossbeam_skiplist::SkipMap;
 use ouroboros::self_referencing;
 use parking_lot::Mutex;
@@ -108,9 +110,21 @@ pub struct TxnLocalIterator {
     item: (Bytes, Bytes),
 }
 
-impl TxnLocalIterator {}
+impl TxnLocalIterator {
+    pub fn entry_to_item(entry: Option<Entry<'_, Bytes, Bytes>>) -> (Bytes, Bytes) {
+        entry
+            .map(|x| (x.key().clone(), x.value().clone()))
+            .unwrap_or_else(|| (Bytes::new(), Bytes::new()))
+    }
+}
 
-impl StorageIterator for TxnLocalIterator {}
+impl StorageIterator for TxnLocalIterator {
+    type KeyType<'a> = &'a [u8];
+    fn next(&mut self) -> anyhow::Result<()> {
+        let entry = self.with_iter_mut(|iter| Self::entry_to_item(iter.next()));
+        
+    }
+}
 
 pub struct TxnIterator {}
 
