@@ -43,6 +43,7 @@ impl Transaction {
 }
 
 impl Drop for Transaction {
+    /// remove the read_ts from the Watermark when the Txn drops.
     fn drop(&mut self) {
         todo!()
     }
