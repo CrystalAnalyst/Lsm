@@ -18,7 +18,7 @@ impl Default for Watermark {
 }
 
 impl Watermark {
-    pub fn new(&self) -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 

@@ -8,15 +8,15 @@ use parking_lot::{Mutex, MutexGuard, RwLock};
 use crate::{
     block::Block,
     compact::{CompactionController, CompactionOptions},
-    iterators::concat_iterator::SstConcatIterator,
-    iterators::merge_iterator::MergeIterator,
-    iterators::two_merge_iterator::TwoMergeIterator,
-    iterators::StorageIterator,
+    iterators::{
+        concat_iterator::SstConcatIterator, merge_iterator::MergeIterator,
+        two_merge_iterator::TwoMergeIterator, StorageIterator,
+    },
     key::KeySlice,
     manifest::Manifest,
     mem_table::MemTable,
-    table::iterator::SsTableIterator,
-    table::SsTable,
+    mvcc::LsmMvccInner,
+    table::{iterator::SsTableIterator, SsTable},
 };
 use std::{
     collections::HashMap,
@@ -99,13 +99,25 @@ pub(crate) struct LsmStorageInner {
     pub(crate) options: Arc<LsmStorageOptions>,
     pub(crate) compaction_controller: CompactionController,
     pub(crate) manifest: Option<Manifest>,
+    pub(crate) mvcc: Option<LsmMvccInner>,
     pub(crate) compaction_filters: Arc<Mutex<Vec<CompactionFilter>>>,
-    // pub(crate) mvcc: Option<LsmMvccInner>,
 }
 
 impl LsmStorageInner {
-    // Inner util methods or functions
+    // boot and Init.
     pub(crate) fn open(path: impl AsRef<Path>, options: LsmStorageOptions) -> Result<Self> {
+        todo!()
+    }
+
+    pub fn next_sst_id(&self) -> usize {
+        todo!()
+    }
+
+    pub fn mvcc(&self) -> &LsmMvccInner {
+        todo!()
+    }
+
+    pub fn manifest(&self) -> &Manifest {
         todo!()
     }
 
@@ -290,11 +302,7 @@ impl LsmStorageInner {
         todo!()
     }
 
-    // SSTable Management & Optimization
-    pub(crate) fn next_sst_id() {
-        todo!()
-    }
-
+    // Compaction
     pub fn add_compaction_filter() {
         todo!()
     }

@@ -45,7 +45,7 @@ impl Transaction {
 impl Drop for Transaction {
     /// remove the read_ts from the Watermark when the Txn drops.
     fn drop(&mut self) {
-        todo!()
+        self.inner.mvcc().ts.lock().1.remove_reader(self.read_ts);
     }
 }
 
