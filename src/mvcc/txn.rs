@@ -178,4 +178,31 @@ impl TxnIterator {
     }
 }
 
-impl StorageIterator for TxnIterator {}
+impl StorageIterator for TxnIterator {
+    type KeyType<'a> = &'a [u8] where Self: 'a;
+
+    fn key(&self) -> Self::KeyType<'_> {
+        self.iter.key()
+    }
+
+    fn value(&self) -> &[u8] {
+        self.iter.value()
+    }
+
+    fn is_valid(&self) -> bool {
+        self.iter.is_valid()
+    }
+
+    fn next(&mut self) -> anyhow::Result<()> {
+        self.iter.next()?;
+        self.skip_delete()?;
+        if self.is_valid() {
+            self.add_to_read_set(self.key());
+        }
+        Ok(())
+    }
+
+    fn number_of_iterators(&self) -> usize {
+        self.iter.number_of_iterators()
+    }
+}
