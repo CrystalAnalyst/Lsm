@@ -15,6 +15,15 @@ use std::sync::Arc;
 use crate::iterators::StorageIterator;
 use crate::key::{Key, KeySlice};
 
+/// Create a bound of `Bytes` from a bound of `&[u8]`.
+pub(crate) fn map_bound(bound: Bound<&[u8]>) -> Bound<Bytes> {
+    match bound {
+        Bound::Included(x) => Bound::Included(Bytes::copy_from_slice(x)),
+        Bound::Excluded(x) => Bound::Excluded(Bytes::copy_from_slice(x)),
+        Bound::Unbounded => Bound::Unbounded,
+    }
+}
+
 /// Data Structure 1: MemTable in the Memory.
 pub struct MemTable {
     // store the key-value pairs, inside it'a SkipMap.

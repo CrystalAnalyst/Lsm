@@ -51,8 +51,19 @@ impl Transaction {
         self.inner.get_with_ts(key, self.read_ts)
     }
 
-    pub fn scan(self: &Arc<Self>, lower: Bound<&[u8]>, upper: Bound<&[u8]>) {
-        todo!()
+    pub fn scan(self: &Arc<Self>, lower: Bound<&[u8]>, upper: Bound<&[u8]>) -> Option<TxnIterator> {
+        let committed = self.committed.load(std::sync::atomic::Ordering::SeqCst);
+        assert!(
+            !committed,
+            "Cannot operate on Transaction that's committed!"
+        );
+        TxnLocalIteratorBuilder {
+            map: self.local_storage.clone(),
+            iter_builder: |map| map.range(map_bound(lower), map_bound(upper)),
+            item: (Bytes::new(), Bytes::new()),
+        }
+        .build();
+        return TxnIterator::create(self.clone(), TxnLocalIterator);
     }
 
     pub fn put(&self, key: &[u8], value: &[u8]) {
@@ -149,14 +160,13 @@ pub struct TxnIterator {
 
 impl TxnIterator {
     pub fn create(
-        &self,
         txn: Arc<Transaction>,
         iter: TwoMergeIterator<TxnLocalIterator, FusedIterator<LsmIterator>>,
     ) -> Result<TxnIterator> {
         let iter = Self { txn, iter };
         iter.skip_delete()?;
         if iter.is_valid() {
-            self.add_to_read_set(self.iter.key());
+            iter.add_to_read_set(iter.key());
         }
         Ok(iter)
     }
