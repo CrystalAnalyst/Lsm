@@ -43,15 +43,16 @@ impl LsmMvccInner {
         todo!()
     }
 
-    pub fn update_commit_ts() {
-        todo!()
+    pub fn update_commit_ts(&self, ts: u64) {
+        self.ts.lock().0 = ts;
     }
 
-    pub fn latest_commit_ts() {
-        todo!()
+    pub fn latest_commit_ts(&self) -> u64 {
+        self.ts.lock().0
     }
 
-    pub fn watermark() {
-        todo!()
+    pub fn watermark(&self) -> u64 {
+        let ts = self.ts.lock();
+        ts.1.watermark().unwrap_or(ts.0)
     }
 }
