@@ -12,7 +12,9 @@ use crossbeam_skiplist::SkipMap;
 use ouroboros::self_referencing;
 use parking_lot::Mutex;
 
+use crate::iterators::two_merge_iterator::TwoMergeIterator;
 use crate::iterators::StorageIterator;
+use crate::lsm_iterator::{FusedIterator, LsmIterator};
 use crate::lsm_storage::LsmStorageInner;
 
 pub struct Transaction {
@@ -140,8 +142,40 @@ impl StorageIterator for TxnLocalIterator {
     }
 }
 
-pub struct TxnIterator {}
+pub struct TxnIterator {
+    txn: Arc<Transaction>,
+    iter: TwoMergeIterator<TxnLocalIterator, FusedIterator<LsmIterator>>,
+}
 
-impl TxnIterator {}
+impl TxnIterator {
+    pub fn create(
+        &self,
+        txn: Arc<Transaction>,
+        iter: TwoMergeIterator<TxnLocalIterator, FusedIterator<LsmIterator>>,
+    ) -> Result<TxnIterator> {
+        let iter = Self { txn, iter };
+        iter.skip_delete()?;
+        if iter.is_valid() {
+            self.add_to_read_set(self.iter.key());
+        }
+        Ok(iter)
+    }
+
+    pub fn skip_delete(&self) -> Result<()> {
+        while self.iter.is_valid() && self.iter.value().is_empty() {
+            self.iter.next()?;
+        }
+        Ok(())
+    }
+
+    /// add the key(hashed) to the read_set when Iter come to this element.
+    pub fn add_to_read_set(&self, key: &[u8]) {
+        if let Some(guard) = &self.txn.key_hashes {
+            let mut guard = guard.lock();
+            let (_, read_set) = &mut *guard;
+            read_set.insert(farmhash::hash32(key));
+        }
+    }
+}
 
 impl StorageIterator for TxnIterator {}
