@@ -127,15 +127,19 @@ impl Key<Vec<u8>> {
 }
 
 impl<'a> Key<&'a [u8]> {
-    pub fn raw_ref(self) -> &'a [u8] {
-        self.0
+    pub fn from_slice(slice: &'a [u8], ts: u64) -> Self {
+        Self(slice, ts)
     }
 
     pub fn to_key_vec(self) -> KeyVec {
         Key(self.0.to_vec(), self.1)
     }
 
-    pub fn from_slice(slice: &'a [u8], ts: u64) -> Self {
-        Self(slice, ts)
+    pub fn key_ref(self) -> &'a [u8] {
+        self.0
+    }
+
+    pub fn ts(&self) -> u64 {
+        self.1
     }
 }

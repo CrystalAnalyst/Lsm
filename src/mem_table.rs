@@ -13,7 +13,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use crate::iterators::StorageIterator;
-use crate::key::{Key, KeySlice};
+use crate::key::{Key, KeyBytes, KeySlice};
 
 /// Create a bound of `Bytes` from a bound of `&[u8]`.
 pub(crate) fn map_bound(bound: Bound<&[u8]>) -> Bound<Bytes> {
@@ -23,6 +23,14 @@ pub(crate) fn map_bound(bound: Bound<&[u8]>) -> Bound<Bytes> {
         Bound::Unbounded => Bound::Unbounded,
     }
 }
+
+/// Create a bound of `Bytes` from a bound of `KeySlice`.
+pub(crate) fn map_key_bound(bound: Bound<KeySlice>) -> Bound<KeyBytes> {
+    match bound {
+        Bound::Included(x) => Bound::Included(KeyBytes::from_bytes_with_ts(Bytes::copy_from_slice(x), ))
+    }
+}
+
 
 /// Data Structure 1: MemTable in the Memory.
 pub struct MemTable {
