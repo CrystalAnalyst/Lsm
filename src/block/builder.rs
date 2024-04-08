@@ -20,11 +20,11 @@ fn common_prefix(first_key: KeySlice, key: KeySlice) -> usize {
     let mut i = 0;
     loop {
         // boundary check.
-        if i >= first_key.len() || i >= key.len() {
+        if i >= first_key.key_len() || i >= key.key_len() {
             break;
         }
         // compare to find the common.
-        if first_key.raw_ref()[i] != key.raw_ref()[i] {
+        if first_key.key_ref()[i] != key.key_ref()[i] {
             break;
         }
         i += 1;
@@ -47,14 +47,14 @@ impl BlockBuilder {
     fn estimated_size(&self) -> usize {
         self.data.len() + self.offsets.len() * SIZEOF_U16 + SIZEOF_U16
     }
-    
+
     /// Adds a new k-v pair(entry) to the block, return false when block is full
     #[must_use]
     pub fn add(&mut self, key: KeySlice, value: &[u8]) -> bool {
         // 0. Convince the key is not empty.
         assert!(!key.is_empty(), "key must not be empty");
         // 1. calculate the Size after adding the new kv pair.
-        let add_on = key.len() + value.len() + SIZEOF_U16 * 3;
+        let add_on = key.raw_len() + value.len() + SIZEOF_U16 * 3;
         let size_expect = self.estimated_size() + add_on;
         if size_expect > self.block_size && !self.is_empty() {
             return false;
@@ -64,12 +64,13 @@ impl BlockBuilder {
         self.offsets.push(self.data.len() as u16);
 
         // 3.  add the new k-v pairs( using common_prefix to save space)
-        // 3.1 add the common_prefix
+        // 3.1 add the common_prefix( an index indicating the end of the common place)
         let prefix = common_prefix(self.first_key.as_key_slice(), key);
         self.data.put_u16(prefix as u16);
         // 3.2 add the kv pair: key_len + key + value_len + value.
-        self.data.put_u16((key.len() - prefix) as u16);
-        self.data.put(&key.raw_ref()[prefix..]);
+        self.data.put_u16((key.key_len() - prefix) as u16);
+        self.data.put(&key.key_ref()[prefix..]);
+        self.data.put_u64(key.ts());
         self.data.put_u16(value.len() as u16);
         self.data.put(value);
 

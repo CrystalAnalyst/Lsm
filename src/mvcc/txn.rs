@@ -5,6 +5,7 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
+use crate::mem_table::map_bound;
 use anyhow::Result;
 use bytes::Bytes;
 use crossbeam_skiplist::map::Entry;
@@ -51,7 +52,7 @@ impl Transaction {
         self.inner.get_with_ts(key, self.read_ts)
     }
 
-    pub fn scan(self: &Arc<Self>, lower: Bound<&[u8]>, upper: Bound<&[u8]>) -> Option<TxnIterator> {
+    pub fn scan(self: &Arc<Self>, lower: Bound<&[u8]>, upper: Bound<&[u8]>) -> Result<TxnIterator> {
         let committed = self.committed.load(std::sync::atomic::Ordering::SeqCst);
         assert!(
             !committed,

@@ -15,7 +15,7 @@ use crate::{
     key::KeySlice,
     manifest::Manifest,
     mem_table::MemTable,
-    mvcc::LsmMvccInner,
+    mvcc::{txn::TxnIterator, LsmMvccInner},
     table::{iterator::SsTableIterator, SsTable},
 };
 use std::{
@@ -237,7 +237,7 @@ impl LsmStorageInner {
         todo!()
     }
 
-    pub fn scan_with_ts() {
+    pub fn scan_with_ts(self: &Arc<Self>, ts: u64) -> Result<TxnIterator> {
         todo!()
     }
 
