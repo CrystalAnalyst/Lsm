@@ -27,10 +27,17 @@ pub(crate) fn map_bound(bound: Bound<&[u8]>) -> Bound<Bytes> {
 /// Create a bound of `Bytes` from a bound of `KeySlice`.
 pub(crate) fn map_key_bound(bound: Bound<KeySlice>) -> Bound<KeyBytes> {
     match bound {
-        Bound::Included(x) => Bound::Included(KeyBytes::from_bytes_with_ts(Bytes::copy_from_slice(x), ))
+        Bound::Included(x) => Bound::Included(KeyBytes::from_bytes_with_ts(
+            Bytes::copy_from_slice(x.key_ref()),
+            x.ts(),
+        )),
+        Bound::Excluded(x) => Bound::Excluded(KeyBytes::from_bytes_with_ts(
+            Bytes::copy_from_slice(x.key_ref()),
+            x.ts(),
+        )),
+        Bound::Unbounded => Bound::Unbounded,
     }
 }
-
 
 /// Data Structure 1: MemTable in the Memory.
 pub struct MemTable {
@@ -108,15 +115,15 @@ impl StorageIterator for MemTableIterator {
     // appoint the KeyType as KeySlice.
     type KeyType<'a> = KeySlice<'a>;
 
+    // get the current entry's key.
+    fn key(&self) -> KeySlice {
+        todo!()
+    }
+
     // get the current entry's value.
     fn value(&self) -> &[u8] {
         // borrow_item() provides an `immutable_reference` to item, just like &item.
         &self.borrow_item().1[..]
-    }
-
-    // get the current entry's key.
-    fn key(&self) -> KeySlice {
-        KeySlice::from_slice(&self.borrow_item().0[..])
     }
 
     // check the validitity of the current entry.

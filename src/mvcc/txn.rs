@@ -57,13 +57,22 @@ impl Transaction {
             !committed,
             "Cannot operate on Transaction that's committed!"
         );
-        TxnLocalIteratorBuilder {
+        let mut local_iter = TxnLocalIteratorBuilder {
             map: self.local_storage.clone(),
-            iter_builder: |map| map.range(map_bound(lower), map_bound(upper)),
+            iter_builder: |map| map.range((map_bound(lower), map_bound(upper))),
             item: (Bytes::new(), Bytes::new()),
         }
         .build();
-        return TxnIterator::create(self.clone(), TxnLocalIterator);
+        let entry = local_iter.with_iter_mut(|iter| TxnLocalIterator::entry_to_item(iter.next()));
+        local_iter.with_mut(|x| *x.item = entry);
+
+        TxnIterator::create(
+            self.clone(),
+            TwoMergeIterator::create(
+                local_iter,
+                self.inner.scan_with_ts(lower, upper, self.read_ts)?,
+            )?,
+        )
     }
 
     pub fn put(&self, key: &[u8], value: &[u8]) {

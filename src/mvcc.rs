@@ -22,6 +22,7 @@ pub(crate) struct CommittedTxnData {
     pub(crate) commit_ts: u64,
 }
 
+/// the Mvcc entity to manage all that related to Concurrency Control.
 pub(crate) struct LsmMvccInner {
     pub(crate) write_lock: Mutex<()>,
     pub(crate) commit_lock: Mutex<()>,
