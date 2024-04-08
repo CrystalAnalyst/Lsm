@@ -16,6 +16,8 @@ pub struct BlockBuilder {
     first_key: KeyVec,
 }
 
+/// to compare how many common places between the first_key and the selected key
+/// and return the place they differs from each other First time.
 fn common_prefix(first_key: KeySlice, key: KeySlice) -> usize {
     let mut i = 0;
     loop {
