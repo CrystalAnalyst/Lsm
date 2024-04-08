@@ -7,15 +7,18 @@ use core::borrow;
 use crossbeam_skiplist::map::Entry;
 use crossbeam_skiplist::SkipMap;
 use ouroboros::self_referencing;
+use std::fmt::Result;
 use std::iter::Skip;
 use std::ops::Bound;
+use std::path::Path;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use crate::iterators::StorageIterator;
 use crate::key::{Key, KeyBytes, KeySlice};
+use crate::wal::Wal;
 
-/// Create a bound of `Bytes` from a bound of `&[u8]`.
+/// Create a bound of `Bytes` from a bound of `&[u8]`(Native).
 pub(crate) fn map_bound(bound: Bound<&[u8]>) -> Bound<Bytes> {
     match bound {
         Bound::Included(x) => Bound::Included(Bytes::copy_from_slice(x)),
@@ -24,7 +27,7 @@ pub(crate) fn map_bound(bound: Bound<&[u8]>) -> Bound<Bytes> {
     }
 }
 
-/// Create a bound of `Bytes` from a bound of `KeySlice`.
+/// Create a bound of `Bytes` from a bound of `KeySlice`(KeyType:Slice).
 pub(crate) fn map_key_bound(bound: Bound<KeySlice>) -> Bound<KeyBytes> {
     match bound {
         Bound::Included(x) => Bound::Included(KeyBytes::from_bytes_with_ts(
@@ -39,14 +42,25 @@ pub(crate) fn map_key_bound(bound: Bound<KeySlice>) -> Bound<KeyBytes> {
     }
 }
 
+/// Create a bound of `KeySlice` from a bound of `&[u8]`(Native) add ts.
+pub(crate) fn map_key_bound_plus_ts(bound: Bound<&[u8]>, ts: u64) -> Bound<KeySlice> {
+    match bound {
+        Bound::Included(x) => Bound::Included(KeySlice::from_slice(x, ts)),
+        Bound::Excluded(x) => Bound::Excluded(KeySlice::from_slice(x, ts)),
+        Bound::Unbounded => Bound::Unbounded,
+    }
+}
+
 /// Data Structure 1: MemTable in the Memory.
 pub struct MemTable {
     // store the key-value pairs, inside it'a SkipMap.
-    map: Arc<SkipMap<Bytes, Bytes>>,
+    pub(crate) map: Arc<SkipMap<Bytes, Bytes>>,
     // index of the current memtable.
     id: usize,
     // the approximate_size of the current table.
     approximate_size: Arc<AtomicUsize>,
+    // optional for Write-ahead Log
+    wal: Option<Wal>,
 }
 
 impl MemTable {
@@ -56,7 +70,27 @@ impl MemTable {
             id,
             map: Arc::new(SkipMap::new()),
             approximate_size: Arc::new(AtomicUsize::new(0)),
+            wal: None,
         }
+    }
+
+    pub fn create_with_wal(id: usize, path: impl AsRef<Path>) -> Result<Self> {
+        Ok(Self {
+            id,
+            wal: Some(Wal::create(path)?),
+            map: Arc::new(SkipMap::new()),
+            approximate_size: Arc::new(AtomicUsize::new(0)),
+        })
+    }
+
+    pub fn recover_from_wal(id: usize, path: impl AsRef<Path>) -> Result<Self> {
+        let map = Arc::new(SkipMap::new());
+        Ok(Self {
+            id,
+            wal: Some(Wal::recover(path, &map)?),
+            map,
+            approximate_size: Arc::new(AtomicUsize::new(0)),
+        })
     }
 
     /// core functionality 1: get() the pair with a key.
@@ -84,8 +118,13 @@ impl MemTable {
 }
 
 /// Define a SkipMap Range-Iterator for `Range Query`, like scan() function.
-type SkipMapRangeIter<'a> =
-    crossbeam_skiplist::map::Range<'a, Bytes, (Bound<Bytes>, Bound<Bytes>), Bytes, Bytes>;
+type SkipMapRangeIter<'a> = crossbeam_skiplist::map::Range<
+    'a,
+    KeyBytes,
+    (Bound<KeyBytes>, Bound<KeyBytes>),
+    KeyBytes,
+    Bytes,
+>;
 
 // define a self-referential struct, to hold refs to its own fields.
 #[self_referencing]
@@ -98,15 +137,15 @@ pub struct MemTableIterator {
     // iter is the actual Iterator when Range-Query is executed.
     iter: SkipMapRangeIter<'this>,
     // item stores the current key-value pair pointed to by the iter.
-    item: (Bytes, Bytes),
+    item: (KeyBytes, Bytes),
 }
 
 impl MemTableIterator {
     /// Convert an entry to an item.
-    fn entry_to_item(entry: Option<Entry<'_, Bytes, Bytes>>) -> (Bytes, Bytes) {
+    fn entry_to_item(entry: Option<Entry<'_, KeyBytes, Bytes>>) -> (KeyBytes, Bytes) {
         entry
             .map(|x| (x.key().clone(), x.value().clone()))
-            .unwrap_or_else(|| (Bytes::from_static(&[]), Bytes::from_static(&[])))
+            .unwrap_or_else(|| (KeyBytes::new(), Bytes::new()))
     }
 }
 
@@ -117,7 +156,7 @@ impl StorageIterator for MemTableIterator {
 
     // get the current entry's key.
     fn key(&self) -> KeySlice {
-        todo!()
+        self.borrow_item().0.as_key_slice()
     }
 
     // get the current entry's value.
