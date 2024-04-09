@@ -164,19 +164,39 @@ impl SsTable {
         let raw_meta_offset = file.read(bloom_offset - 4, 4)?;
         let block_meta_offset = (&raw_meta_offset[..]).get_u32() as u64;
         let raw_meta = file.read(block_meta_offset, bloom_offset - 4 - block_meta_offset)?;
-        let block_meta = BlockMeta::decode_block_meta(&raw_meta[..])?;
+        let (block_meta, max_ts) = BlockMeta::decode_block_meta(&raw_meta[..])?;
         // construct SSTable Object.
-        todo!()
+        Ok(Self {
+            file,
+            block_meta,
+            block_meta_offset: block_meta_offset as usize,
+            id,
+            first_key: block_meta.first().unwrap().first_key.clone(),
+            last_key: block_meta.last().unwrap().last_key.clone(),
+            max_ts,
+            block_cache,
+            bloom: Some(bloom_filter),
+        })
     }
 
-    /// create a mock SST with only [first key + last key] metadata.
+    /// create a `mock SST` with only [first key + last key] metadata.
     pub fn create_meta_only(
         id: usize,
         file_size: u64,
         first_key: KeyBytes,
         last_key: KeyBytes,
     ) -> Self {
-        todo!()
+        Self {
+            file: FileObject(None, file_size),
+            block_meta: vec![],
+            block_meta_offset: 0,
+            id,
+            first_key,
+            last_key,
+            max_ts: 0,
+            block_cache: None,
+            bloom: None,
+        }
     }
 
     /*-----------------------Executor--------------------------- */
