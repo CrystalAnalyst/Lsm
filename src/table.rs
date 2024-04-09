@@ -13,6 +13,8 @@ use anyhow::{bail, Ok};
 use bytes::{Buf, BufMut};
 use std::{fs::File, io::Read, path::Path, sync::Arc};
 
+/// Here you can see the Actual BlockMeta(the metadata for managing the Block)
+/// that store Every block's offset in the File and the (FristKey, LastKey) contained.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlockMeta {
     offset: usize,
@@ -21,54 +23,70 @@ pub struct BlockMeta {
 }
 
 impl BlockMeta {
-    pub fn encode_block_meta(block_meta: &[BlockMeta], buf: &mut Vec<u8>) {
-        // calculate the estimated_size of the encoded data.
+    pub fn encode_block_meta(block_meta: &[BlockMeta], max_ts: u64, buf: &mut Vec<u8>) {
+        // Init with u32, which represents the overall Number of Blocks existing.
         let mut estimated_size = std::mem::size_of::<u32>();
         for meta in block_meta {
-            // calculate the size of each block's metadata.
+            /*----------calculate the size of each block's metadata----------*/
+            // offset.
             estimated_size += std::mem::size_of::<u32>();
-            estimated_size += std::mem::size_of::<u16>() + meta.first_key.len();
-            estimated_size += std::mem::size_of::<u16>() + meta.last_key.len();
+            // double key_len and the actual length of key and timestamp.
+            estimated_size += std::mem::size_of::<u16>() + meta.first_key.raw_len();
+            estimated_size += std::mem::size_of::<u16>() + meta.last_key.raw_len();
         }
+        // size of the TimeStamp
+        estimated_size += std::mem::size_of::<u64>();
         // size of the checksum
         estimated_size += std::mem::size_of::<u32>();
-
         // reserve space in the buffer to improve perf.
         buf.reserve(estimated_size);
+        // stored the original len to add checksum at the bottom
         let original_len = buf.len();
+        /*------------Put all these staff into buffer--------*/
         buf.put_u32(block_meta.len() as u32);
-
         for meta in block_meta {
             buf.put_u32(meta.offset as u32);
-            buf.put_u16(meta.first_key.len() as u16);
-            buf.put_slice(meta.first_key.raw_ref());
-            buf.put_u16(meta.last_key.len() as u16);
-            buf.put_slice(meta.last_key.raw_ref());
+            //first key
+            buf.put_u16(meta.first_key.key_len() as u16);
+            buf.put_slice(meta.first_key.key_ref());
+            buf.put_u64(meta.first_key.ts());
+            //last key
+            buf.put_u16(meta.last_key.key_len() as u16);
+            buf.put_slice(meta.last_key.key_ref());
+            buf.put_u64(meta.last_key.ts());
         }
+        buf.put_u64(max_ts);
         buf.put_u32(crc32fast::hash(&buf[original_len + 4..]));
         assert_eq!(estimated_size, buf.len() - original_len)
     }
 
-    pub fn decode_block_meta(mut buf: &[u8]) -> Result<Vec<BlockMeta>> {
+    pub fn decode_block_meta(mut buf: &[u8]) -> Result<(Vec<BlockMeta>, u64)> {
         let mut block_meta = Vec::new();
         let num = buf.get_u32() as usize;
         let checksum = crc32fast::hash(&buf[..buf.remaining() - 4]);
         for _ in 0..num {
+            // offset
             let offset = buf.get_u32() as usize;
+            // first key
             let first_key_len = buf.get_u16() as usize;
-            let first_key = KeyBytes::from_bytes(buf.copy_to_bytes(first_key_len));
+            let first_key =
+                KeyBytes::from_bytes_with_ts(buf.copy_to_bytes(first_key_len), buf.get_u64());
+            // last key
             let last_key_len: usize = buf.get_u16() as usize;
-            let last_key = KeyBytes::from_bytes(buf.copy_to_bytes(last_key_len));
+            let last_key =
+                KeyBytes::from_bytes_with_ts(buf.copy_to_bytes(last_key_len), buf.get_u64());
+            // The One Indepedent Entity
             block_meta.push(BlockMeta {
                 offset,
                 first_key,
                 last_key,
             });
         }
+        let max_ts = buf.get_u64();
         if buf.get_u32() != checksum {
             bail!("meta checksum mismatched");
         }
-        Ok(block_meta)
+        Ok((block_meta, max_ts))
     }
 }
 
@@ -76,6 +94,7 @@ impl BlockMeta {
 pub struct FileObject(Option<File>, u64);
 
 impl FileObject {
+    // Constructor
     pub fn create(path: &Path, data: Vec<u8>) -> Result<Self> {
         std::fs::write(path, &data)?;
         File::open(path)?.sync_all()?;
@@ -91,6 +110,7 @@ impl FileObject {
         Ok(FileObject(Some(file), size))
     }
 
+    // Executor
     pub fn read(&self, offset: u64, len: u64) -> Result<Vec<u8>> {
         use std::os::unix::fs::FileExt;
         let mut data = vec![0; len as usize];
@@ -101,6 +121,7 @@ impl FileObject {
         Ok(data)
     }
 
+    // Accessor
     pub fn size(&self) -> u64 {
         self.1
     }
@@ -108,21 +129,24 @@ impl FileObject {
 
 /// An SSTable is a file format used for storing key-value pairs sorted by keys.
 pub struct SsTable {
-    // the actual storage unit of SsTable.
+    // File handle
     pub(crate) file: FileObject,
-    // the meda blocks that hold info for data blocks.
+    // BlockMeta
     pub(crate) block_meta: Vec<BlockMeta>,
-    // the offset that indicates `the start point of meta blocks` in `file`.
     pub(crate) block_meta_offset: usize,
-    // identifier of the SsTable
+    // Meta data member of SsTable
     id: usize,
-    block_cache: Option<Arc<BlockCache>>,
     first_key: KeyBytes,
     last_key: KeyBytes,
+    max_ts: u64,
+    // Optimization: Cache and Bloom Filter
+    block_cache: Option<Arc<BlockCache>>,
     pub(crate) bloom: Option<Bloom>,
 }
 
 impl SsTable {
+    /*-----------------------Constructor--------------------------- */
+
     /// `open()` is responsible for opening an SSTable from a file.
     /// this function reads the necessary metadata from the file,
     /// including the Bloom filter and constructs an `SSTable` object.
@@ -142,17 +166,7 @@ impl SsTable {
         let raw_meta = file.read(block_meta_offset, bloom_offset - 4 - block_meta_offset)?;
         let block_meta = BlockMeta::decode_block_meta(&raw_meta[..])?;
         // construct SSTable Object.
-        Ok(Self {
-            file,
-            first_key: block_meta.first().unwrap().first_key.clone(),
-            last_key: block_meta.last().unwrap().last_key.clone(),
-            block_meta,
-            block_meta_offset: block_meta_offset as usize,
-            id,
-            block_cache,
-            bloom: Some(bloom_filter),
-            // todo : add timestamp.
-        })
+        todo!()
     }
 
     /// create a mock SST with only [first key + last key] metadata.
@@ -162,17 +176,10 @@ impl SsTable {
         first_key: KeyBytes,
         last_key: KeyBytes,
     ) -> Self {
-        Self {
-            file: FileObject(None, file_size),
-            block_meta: vec![],
-            block_meta_offset: 0,
-            id,
-            block_cache: None,
-            first_key,
-            last_key,
-            bloom: None,
-        }
+        todo!()
     }
+
+    /*-----------------------Executor--------------------------- */
 
     /// reads a block from the disk based on the given block index.
     /// block_idx: index of the block to be read.
@@ -222,6 +229,19 @@ impl SsTable {
             .saturating_sub(1)
     }
 
+    /*-----------------------Accessor--------------------------- */
+    pub fn table_size(&self) -> u64 {
+        self.file.1
+    }
+
+    pub fn num_of_blocks(&self) -> usize {
+        self.block_meta.len()
+    }
+
+    pub fn sst_id(&self) -> usize {
+        self.id
+    }
+
     pub fn first_key(&self) -> &KeyBytes {
         &self.first_key
     }
@@ -230,15 +250,7 @@ impl SsTable {
         &self.last_key
     }
 
-    pub fn num_of_blocks(&self) -> usize {
-        self.block_meta.len()
-    }
-
-    pub fn table_size(&self) -> u64 {
-        self.file.1
-    }
-
-    pub fn sst_id(&self) -> usize {
-        self.id
+    pub fn max_ts(&self) -> u64 {
+        self.max_ts
     }
 }

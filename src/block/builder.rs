@@ -8,7 +8,7 @@ use crate::key::{Key, KeySlice, KeyVec};
 pub struct BlockBuilder {
     /// all key-value pairs(serilized) in the block.
     data: Vec<u8>,
-    /// offsets of each k-v entries
+    /// offsets of each k-v entries(the actual bytes takes up)
     offsets: Vec<u16>,
     /// the whole block size
     block_size: usize,

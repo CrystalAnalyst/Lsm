@@ -7,7 +7,6 @@ use core::borrow;
 use crossbeam_skiplist::map::Entry;
 use crossbeam_skiplist::SkipMap;
 use ouroboros::self_referencing;
-use std::fmt::Result;
 use std::iter::Skip;
 use std::ops::Bound;
 use std::path::Path;
