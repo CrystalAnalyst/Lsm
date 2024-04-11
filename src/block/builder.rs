@@ -6,18 +6,16 @@ use crate::key::{Key, KeySlice, KeyVec};
 
 /// Builds a block
 pub struct BlockBuilder {
-    /// all key-value pairs(serilized) in the block.
+    // block data
     data: Vec<u8>,
-    /// offsets of each k-v entries(the actual bytes takes up)
     offsets: Vec<u16>,
-    /// the whole block size
-    block_size: usize,
-    /// the first key in the block
+    // metadata
     first_key: KeyVec,
+    block_size: usize,
 }
 
 /// to compare how many common places between the first_key and the selected key
-/// and return the place they differs from each other First time.
+/// and return the place they differs First time from each other
 fn common_prefix(first_key: KeySlice, key: KeySlice) -> usize {
     let mut i = 0;
     loop {
@@ -40,12 +38,13 @@ impl BlockBuilder {
         Self {
             data: Vec::new(),
             offsets: Vec::new(),
-            block_size,
             first_key: KeyVec::new(),
+            block_size,
         }
     }
 
     /// return the estimated_size of the `current`` Block
+    /// Entries + offsets + #Entry
     fn estimated_size(&self) -> usize {
         self.data.len() + self.offsets.len() * SIZEOF_U16 + SIZEOF_U16
     }
@@ -53,34 +52,23 @@ impl BlockBuilder {
     /// Adds a new k-v pair(entry) to the block, return false when block is full
     #[must_use]
     pub fn add(&mut self, key: KeySlice, value: &[u8]) -> bool {
-        // 0. Convince the key is not empty.
         assert!(!key.is_empty(), "key must not be empty");
-        // 1. calculate the Size after adding the new kv pair.
         let add_on = key.raw_len() + value.len() + SIZEOF_U16 * 3;
         let size_expect = self.estimated_size() + add_on;
         if size_expect > self.block_size && !self.is_empty() {
             return false;
         }
-
-        // 2. add the offset of the data into the offset array.
         self.offsets.push(self.data.len() as u16);
-
-        // 3.  add the new k-v pairs( using common_prefix to save space)
-        // 3.1 add the common_prefix( an index indicating the end of the common place)
         let prefix = common_prefix(self.first_key.as_key_slice(), key);
         self.data.put_u16(prefix as u16);
-        // 3.2 add the kv pair: key_len + key + value_len + value.
         self.data.put_u16((key.key_len() - prefix) as u16);
         self.data.put(&key.key_ref()[prefix..]);
         self.data.put_u64(key.ts());
         self.data.put_u16(value.len() as u16);
         self.data.put(value);
-
-        // 4. check the first_key, if its empty then replace.
         if self.first_key.is_empty() {
             self.first_key = key.to_key_vec();
         }
-
         true
     }
 
