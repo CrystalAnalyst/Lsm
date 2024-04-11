@@ -94,7 +94,14 @@ impl BlockMeta {
 pub struct FileObject(Option<File>, u64);
 
 impl FileObject {
-    // Constructor
+    /// open the file lies in the Given Path and return the File object
+    pub fn open(path: &Path) -> Result<Self> {
+        let file = File::options().read(true).write(false).open(path)?;
+        let size = file.metadata()?.len();
+        Ok(FileObject(Some(file), size))
+    }
+
+    /// Write given data to the path
     pub fn create(path: &Path, data: Vec<u8>) -> Result<Self> {
         std::fs::write(path, &data)?;
         File::open(path)?.sync_all()?;
@@ -104,13 +111,8 @@ impl FileObject {
         ))
     }
 
-    pub fn open(path: &Path) -> Result<Self> {
-        let file = File::options().read(true).write(false).open(path)?;
-        let size = file.metadata()?.len();
-        Ok(FileObject(Some(file), size))
-    }
-
     // Executor
+    /// read the file from: `offset`,  read `len` bytes.
     pub fn read(&self, offset: u64, len: u64) -> Result<Vec<u8>> {
         use std::os::unix::fs::FileExt;
         let mut data = vec![0; len as usize];

@@ -6,25 +6,22 @@ use std::sync::Arc;
 
 use super::{Block, SIZEOF_U16};
 
-/// The actual Storage for Key-Value pairs in the bottom
+/// The Iterator Over Blocks
 /// So you can see all the key here is `KeyVec` means that
 /// Block has the true ownership of the data.
 pub struct BlockIterator {
-    // reference to the block
     block: Arc<Block>,
-    // the `current key` at the iterator position
-    key: KeyVec,
-    // the ` first key ` in the block.
-    first_key: KeyVec,
-    // the value range from the block
-    value_range: (usize, usize),
-    // the current index at the iterator pos.
+    // Block Metadata
     idx: usize,
+    first_key: KeyVec,
+    value_range: (usize, usize),
+    // Current Entry's key
+    key: KeyVec,
 }
 
 impl Block {
+    /// get the first_key(the key and ts) from One Block
     fn get_first_key(&self) -> KeyVec {
-        // get data stored in buffer.
         let mut buf = &self.data[..];
         // skip the overlap(CommonPrefix)
         buf.get_u16();
@@ -39,14 +36,14 @@ impl Block {
 }
 
 impl BlockIterator {
-    // Constructor
+    // Constructor(Associate Function)
     fn new(block: Arc<Block>) -> Self {
         Self {
-            first_key: block.get_first_key(),
-            key: KeyVec::new(),
             block,
-            value_range: (0, 0),
             idx: 0,
+            first_key: block.get_first_key(),
+            value_range: (0, 0),
+            key: KeyVec::new(),
         }
     }
 
@@ -104,21 +101,17 @@ impl BlockIterator {
         self.seek_to(0);
     }
 
-    /// move to specified offset and update the current key-value pair.
-    /// index update will be handled by calller
+    /// move to specified offset("per Bytes") and update the current key-value pair.
+    /// index update will be handled by caller
     fn seek_to_offset(&mut self, offset: usize) {
-        // get the entry.
         let mut entry = &self.block.data[offset..];
-        // get the key (including the prefix)
         let prefix = entry.get_u16() as usize;
         let key_len = entry.get_u16() as usize;
         let key = &entry[..key_len];
-        // update the key
         self.key.clear();
         self.key.append(&self.first_key.key_ref()[..prefix]);
         self.key.append(key);
         entry.advance(key_len);
-        // update the value and value range.
         let value_len = entry.get_u16() as usize;
         let value_offset_begin = offset + SIZEOF_U16 + SIZEOF_U16 + key_len + SIZEOF_U16;
         let value_offset_end = value_offset_begin + value_len;
