@@ -39,9 +39,9 @@ impl BlockIterator {
     // Constructor(Associate Function)
     fn new(block: Arc<Block>) -> Self {
         Self {
+            first_key: block.get_first_key(),
             block,
             idx: 0,
-            first_key: block.get_first_key(),
             value_range: (0, 0),
             key: KeyVec::new(),
         }

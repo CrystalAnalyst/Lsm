@@ -170,11 +170,11 @@ impl SsTable {
         // construct SSTable Object.
         Ok(Self {
             file,
+            first_key: block_meta.first().unwrap().first_key.clone(),
+            last_key: block_meta.last().unwrap().last_key.clone(),
             block_meta,
             block_meta_offset: block_meta_offset as usize,
             id,
-            first_key: block_meta.first().unwrap().first_key.clone(),
-            last_key: block_meta.last().unwrap().last_key.clone(),
             max_ts,
             block_cache,
             bloom: Some(bloom_filter),

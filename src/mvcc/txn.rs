@@ -102,7 +102,7 @@ impl Transaction {
         );
         self.local_storage
             .insert(Bytes::copy_from_slice(key), Bytes::new());
-        if let Some(key_hashes) = self.key_hashes {
+        if let Some(key_hashes) = &self.key_hashes {
             let mut key_hashes = key_hashes.lock();
             let (write_hash, _) = &mut *key_hashes;
             write_hash.insert(farmhash::hash32(key));
@@ -173,7 +173,7 @@ impl TxnIterator {
         txn: Arc<Transaction>,
         iter: TwoMergeIterator<TxnLocalIterator, FusedIterator<LsmIterator>>,
     ) -> Result<TxnIterator> {
-        let iter = Self { txn, iter };
+        let mut iter = Self { txn, iter };
         iter.skip_delete()?;
         if iter.is_valid() {
             iter.add_to_read_set(iter.key());
@@ -181,7 +181,7 @@ impl TxnIterator {
         Ok(iter)
     }
 
-    pub fn skip_delete(&self) -> Result<()> {
+    pub fn skip_delete(&mut self) -> Result<()> {
         while self.iter.is_valid() && self.iter.value().is_empty() {
             self.iter.next()?;
         }
