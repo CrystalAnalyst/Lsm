@@ -6,6 +6,7 @@ use crate::{
 };
 use anyhow::Result;
 
+use std::path::Path;
 use super::{BlockMeta, SsTable};
 use farmhash::FarmHasher;
 

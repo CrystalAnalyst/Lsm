@@ -119,3 +119,42 @@ impl Bloom {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    // Import the Bloom struct and other necessary items
+    use super::super::*;
+
+    // Define your unit tests within the tests module
+    #[test]
+    fn test_bloom_filter() {
+        // Define some example data and parameters
+        let keys = vec![123, 456, 789];
+        let bits_per_key = 10;
+        let false_positive_rate = 0.01;
+
+        // Build a bloom filter from key hashes
+        let bloom_filter = Bloom::build_from_key_hashes(&keys, bits_per_key);
+
+        // Encode the bloom filter into a vector
+        let mut encoded_bloom = Vec::new();
+        bloom_filter.encode(&mut encoded_bloom);
+
+        // Decode the encoded bloom filter
+        let decoded_bloom = Bloom::decode(&encoded_bloom).unwrap();
+
+        // Check if a hash may be contained in the bloom filter
+        let hash_to_check = 123;
+        let may_contain = decoded_bloom.may_contain(hash_to_check as u32);
+        assert!(may_contain, "Bloom filter should contain the hash");
+
+        // Get bloom filter bits per key
+        let bits_per_key_calculated = Bloom::bloom_bits_per_key(keys.len(), false_positive_rate);
+        assert_eq!(
+            bits_per_key, bits_per_key_calculated,
+            "Calculated bits per key should match expected value"
+        );
+    }
+
+    // Define more unit tests as needed
+}

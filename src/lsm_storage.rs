@@ -13,6 +13,7 @@ use crate::{
         two_merge_iterator::TwoMergeIterator, StorageIterator,
     },
     key::KeySlice,
+    lsm_iterator::{FusedIterator, LsmIterator},
     manifest::Manifest,
     mem_table::MemTable,
     mvcc::{txn::TxnIterator, LsmMvccInner},
@@ -20,6 +21,7 @@ use crate::{
 };
 use std::{
     collections::HashMap,
+    ops::Bound,
     path::{Path, PathBuf},
     sync::{atomic::AtomicUsize, Arc},
     usize,
@@ -79,7 +81,7 @@ pub enum CompactionFilter {
 }
 
 fn key_within(user_key: &[u8], table_begin: KeySlice, table_end: KeySlice) -> bool {
-    table_begin.raw_ref() <= user_key && user_key <= table_end.raw_ref()
+    table_begin.key_ref() <= user_key && user_key <= table_end.key_ref()
 }
 
 /// the core data-structure of LsmStorage Engine.
@@ -151,82 +153,7 @@ impl LsmStorageInner {
     }
 
     pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
-        // 1. get the snapshot to ensure consistency.
-        let snapshot = {
-            let guard = self.state.read();
-            Arc::clone(&guard)
-        }; // drop global lock here
-
-        // Search on the current memtable.
-        if let Some(value) = snapshot.memtable.get(key) {
-            if value.is_empty() {
-                // found tomestone, return key not exists
-                return Ok(None);
-            }
-            return Ok(Some(value));
-        }
-
-        // Search on immutable memtables.
-        for memtable in snapshot.imm_memtables.iter() {
-            if let Some(value) = memtable.get(key) {
-                if value.is_empty() {
-                    // found tomestone, return key not exists
-                    return Ok(None);
-                }
-                return Ok(Some(value));
-            }
-        }
-
-        // Search in SSTables.
-        // a. L0 SSTables
-        let mut l0_iters = Vec::with_capacity(snapshot.l0_sstables.len());
-        let keep_table = |key: &[u8], table: &SsTable| {
-            if key_within(
-                key,
-                table.first_key().as_key_slice(),
-                table.last_key().as_key_slice(),
-            ) {
-                if let Some(bloom) = &table.bloom {
-                    if bloom.may_contain(farmhash::fingerprint32(key)) {
-                        return true;
-                    }
-                } else {
-                    return true;
-                }
-            }
-            false
-        };
-        for table in &snapshot.l0_sstables {
-            let table = snapshot.sstables[table].clone();
-            if keep_table(key, &table) {
-                l0_iters.push(Box::new(SsTableIterator::create_and_seek_to_key(
-                    table,
-                    KeySlice::from_slice(key),
-                )?));
-            }
-        }
-        let l0_iter = MergeIterator::create(l0_iters);
-        // Higher-Level SSTables.
-        let mut level_iters = Vec::with_capacity(snapshot.levels.len());
-        for (_, level_sst_ids) in &snapshot.levels {
-            let mut level_ssts = Vec::with_capacity(snapshot.levels[0].1.len());
-            for table in level_sst_ids {
-                let table = snapshot.sstables[table].clone();
-                if keep_table(key, &table) {
-                    level_ssts.push(table);
-                }
-            }
-            let level_iter =
-                SstConcatIterator::create_and_seek_to_key(level_ssts, KeySlice::from_slice(key))?;
-            level_iters.push(Box::new(level_iter));
-        }
-        // Merge Iteration( merges into a single Iterator )
-        let iter = TwoMergeIterator::create(l0_iter, MergeIterator::create(level_iters))?;
-        // Key Lookup
-        if iter.is_valid() && iter.key().raw_ref() == key && !iter.value().is_empty() {
-            return Ok(Some(Bytes::copy_from_slice(iter.value())));
-        }
-        Ok(None)
+        todo!()
     }
 
     pub fn get_with_ts(&self, key: &[u8], ts: u64) -> Result<Option<Bytes>> {
@@ -237,7 +164,12 @@ impl LsmStorageInner {
         todo!()
     }
 
-    pub fn scan_with_ts(self: &Arc<Self>, ts: u64) -> Result<TxnIterator> {
+    pub fn scan_with_ts(
+        self: &Arc<Self>,
+        lower: Bound<&[u8]>,
+        upper: Bound<&[u8]>,
+        read_ts: u64,
+    ) -> Result<FusedIterator<LsmIterator>> {
         todo!()
     }
 
