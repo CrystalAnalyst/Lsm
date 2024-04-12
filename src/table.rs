@@ -4,9 +4,12 @@ pub(crate) mod builder;
 pub mod iterator;
 
 use self::bloom::Bloom;
+pub use self::builder::SsTableBuilder;
+pub use self::iterator::SsTableIterator;
 use crate::block::{self, Block};
 use crate::key::{Key, KeyBytes, KeySlice};
 use crate::lsm_storage::BlockCache;
+
 use anyhow::anyhow;
 use anyhow::Result;
 use anyhow::{bail, Ok};

@@ -3,7 +3,7 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
-use crate::lsm_storage::LsmStroageState;
+use crate::lsm_storage::LsmStorageState;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SimpleLeveledCompactionTask {
@@ -32,7 +32,7 @@ impl SimpleLeveledCompactionController {
 
     pub fn generate_compaction_task(
         &self,
-        snapshot: &LsmStroageState,
+        snapshot: &LsmStorageState,
     ) -> Option<SimpleLeveledCompactionTask> {
         // 1. calculate level sizes.
         let mut level_sizes = Vec::new();
@@ -73,10 +73,10 @@ impl SimpleLeveledCompactionController {
 
     pub fn apply_compaction_result(
         &self,
-        snapshot: &LsmStroageState,
+        snapshot: &LsmStorageState,
         task: &SimpleLeveledCompactionTask,
         output: &[usize],
-    ) -> (LsmStroageState, Vec<usize>) {
+    ) -> (LsmStorageState, Vec<usize>) {
         let mut snapshot = snapshot.clone();
         let mut files_to_remove = Vec::new();
         // handle upper-level compaction ( Not L0 )

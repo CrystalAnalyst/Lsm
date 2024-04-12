@@ -1,6 +1,9 @@
 use bytes::Bytes;
 use std::fmt::Debug;
 
+/// For testing purpose, should not use anywhere in your implementation.
+pub const TS_ENABLED: bool = true;
+
 // Some Constants used for TimeStamp Management.
 pub const TS_MAX: u64 = std::u64::MAX;
 pub const TS_MIN: u64 = std::u64::MIN;

@@ -3,12 +3,12 @@ mod leveled;
 mod simple_leveled;
 mod tiered;
 
-use leveled::{LeveledCompactionController, LeveledCompactionTask};
+pub use leveled::{LeveledCompactionController, LeveledCompactionTask};
 use serde::{Deserialize, Serialize};
-use simple_leveled::{SimpleLeveledCompactionController, SimpleLeveledCompactionTask};
-use tiered::{TieredCompactionController, TieredCompactionTask};
+pub use simple_leveled::{SimpleLeveledCompactionController, SimpleLeveledCompactionTask};
+pub use tiered::{TieredCompactionController, TieredCompactionTask};
 
-use self::{
+pub use self::{
     leveled::LeveledCompactionOptions, simple_leveled::SimpleLeveledCompactionOptions,
     tiered::TieredCompactionOptions,
 };

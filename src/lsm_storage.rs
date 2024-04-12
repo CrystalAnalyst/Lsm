@@ -33,7 +33,7 @@ pub type BlockCache = moka::sync::Cache<(usize, usize), Arc<Block>>;
 /// stores the state of the storage Engine.
 /// This is the core structure for Concurrenty Control and MetaData Manangement.
 #[derive(Clone)]
-pub struct LsmStroageState {
+pub struct LsmStorageState {
     // mutable memtable (only one at any time, allow multi-thread to access)
     pub memtable: Arc<MemTable>,
     // immutable_memtable for flush to the disk (A vector of)
@@ -46,7 +46,7 @@ pub struct LsmStroageState {
     pub sstables: HashMap<usize, Arc<SsTable>>,
 }
 
-impl LsmStroageState {
+impl LsmStorageState {
     fn create(options: &LsmStorageOptions) -> Self {
         Self {
             // when first create, the index of the memtable is 0.
@@ -88,7 +88,7 @@ fn key_within(user_key: &[u8], table_begin: KeySlice, table_end: KeySlice) -> bo
 /// only visible inside the crate.
 pub(crate) struct LsmStorageInner {
     // lock the state for concurrent R/w.
-    pub(crate) state: Arc<RwLock<Arc<LsmStroageState>>>,
+    pub(crate) state: Arc<RwLock<Arc<LsmStorageState>>>,
     // lock for sync.
     pub(crate) state_lock: Mutex<()>,
     // the path to the storage location on the file system.

@@ -4,7 +4,7 @@ use std::{collections::HashSet, process::Output};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{compact::leveled, lsm_storage::LsmStroageState};
+use crate::{compact::leveled, lsm_storage::LsmStorageState};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LeveledCompactionTask {
@@ -35,7 +35,7 @@ impl LeveledCompactionController {
 
     fn find_overlaping_ssts(
         &self,
-        snapshot: &LsmStroageState,
+        snapshot: &LsmStorageState,
         sst_ids: &[usize],
         in_level: usize,
     ) -> Vec<usize> {
@@ -70,7 +70,7 @@ impl LeveledCompactionController {
 
     pub fn generate_compaction_task(
         &self,
-        snapshot: &LsmStroageState,
+        snapshot: &LsmStorageState,
     ) -> Option<LeveledCompactionTask> {
         // calculate the target size
         let mut target_level_sizes = (0..self.options.max_levels).map(|_| 0).collect::<Vec<_>>();
@@ -136,10 +136,10 @@ impl LeveledCompactionController {
 
     pub fn apply_compaction_result(
         &self,
-        snapshot: &LsmStroageState,
+        snapshot: &LsmStorageState,
         task: &LeveledCompactionTask,
         output: &[usize],
-    ) -> (LsmStroageState, Vec<usize>) {
+    ) -> (LsmStorageState, Vec<usize>) {
         let mut snapshot = snapshot.clone();
         let mut files_to_remove = Vec::new();
         let mut upper_level_sst_ids_set = task
@@ -152,7 +152,7 @@ impl LeveledCompactionController {
             .iter()
             .copied()
             .collect::<HashSet<_>>();
-        
+
         if let Some(upper_level) = task.upper_level {
             let new_upper_level_ssts = snapshot.levels[upper_level - 1]
                 .1
