@@ -3,6 +3,7 @@ use std::fmt::Debug;
 
 /// For testing purpose, should not use anywhere in your implementation.
 pub const TS_ENABLED: bool = true;
+pub const TS_DEFAULT: u64 = 0;
 
 // Some Constants used for TimeStamp Management.
 pub const TS_MAX: u64 = std::u64::MAX;
@@ -29,6 +30,10 @@ impl<T: AsRef<[u8]>> Key<T> {
 
     pub fn is_empty(&self) -> bool {
         self.0.as_ref().is_empty()
+    }
+
+    pub fn for_testing_ts(self) -> u64 {
+        self.1
     }
 }
 
@@ -81,8 +86,20 @@ impl<'a> Key<&'a [u8]> {
         Self(slice, ts)
     }
 
+    pub fn for_testing_from_slice_with_ts(slice: &'a [u8], ts: u64) -> Self {
+        Self(slice, ts)
+    }
+
+    pub fn for_testing_from_slice_no_ts(slice: &'a [u8]) -> Self {
+        Self(slice, TS_DEFAULT)
+    }
+
     // Accessors
     pub fn key_ref(self) -> &'a [u8] {
+        self.0
+    }
+
+    pub fn for_testing_key_ref(&self) -> &'a [u8] {
         self.0
     }
 
@@ -108,8 +125,16 @@ impl Key<Vec<u8>> {
         Self(key, ts)
     }
 
+    pub fn for_testing_vec_no_ts(key: Vec<u8>) -> Self {
+        Self(key, TS_DEFAULT)
+    }
+
     // Accessors
     pub fn key_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+
+    pub fn for_testing_key_ref(&self) -> &[u8] {
         self.0.as_ref()
     }
 
@@ -158,8 +183,16 @@ impl Key<Bytes> {
         Key(bytes, ts)
     }
 
+    pub fn for_testing_bytes_no_ts(bytes: Bytes) -> KeyBytes {
+        Key(bytes, TS_DEFAULT)
+    }
+
     // Accessor
     pub fn key_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+
+    pub fn for_testing_key_ref(&self) -> &[u8] {
         self.0.as_ref()
     }
 

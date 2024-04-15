@@ -65,7 +65,7 @@ impl SsTableBuilder {
     }
 
     /// builds the SSTable and writes it to the given path
-    fn build(
+    pub fn build(
         mut self,
         id: usize,
         block_cache: Option<Arc<BlockCache>>,
