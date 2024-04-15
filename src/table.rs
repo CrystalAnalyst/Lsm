@@ -155,6 +155,7 @@ impl SsTable {
     /// `open()` is responsible for opening an SSTable from a file.
     /// this function reads the necessary metadata from the file,
     /// including the Bloom filter and constructs an `SSTable` object.
+    /// params:
     /// id : an identifier for the SSTable
     /// block_cache: Optional, used to store blocks of data read from the SSTable file.
     /// file : the file object representing the SSTable file.
@@ -184,7 +185,8 @@ impl SsTable {
         })
     }
 
-    /// create a `mock SST` with only [first key + last key] metadata.
+    /// create a `mock SST`(means that It has not File object underlying)
+    /// with only [first key + last key] metadata.
     pub fn create_meta_only(
         id: usize,
         file_size: u64,

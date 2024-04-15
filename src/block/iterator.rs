@@ -96,27 +96,9 @@ impl BlockIterator {
 
     /*------------------Util Methods-------------------- */
 
-    ///find the first key.
+    /// find the first entry.
     pub fn seek_to_first(&mut self) {
         self.seek_to(0);
-    }
-
-    /// move to specified offset("per Bytes") and update the current key-value pair.
-    /// index update will be handled by caller
-    fn seek_to_offset(&mut self, offset: usize) {
-        let mut entry = &self.block.data[offset..];
-        let prefix = entry.get_u16() as usize;
-        let key_len = entry.get_u16() as usize;
-        let key = &entry[..key_len];
-        self.key.clear();
-        self.key.append(&self.first_key.key_ref()[..prefix]);
-        self.key.append(key);
-        entry.advance(key_len);
-        let value_len = entry.get_u16() as usize;
-        let value_offset_begin = offset + SIZEOF_U16 + SIZEOF_U16 + key_len + SIZEOF_U16;
-        let value_offset_end = value_offset_begin + value_len;
-        self.value_range = (value_offset_begin, value_offset_end);
-        entry.advance(value_len);
     }
 
     /// move to next entry.
@@ -137,5 +119,23 @@ impl BlockIterator {
         let offset = self.block.offsets[idx] as usize;
         self.seek_to_offset(offset);
         self.idx = idx;
+    }
+
+    /// move to specified offset("per Bytes") and update the current key-value pair.
+    /// index update will be handled by caller
+    fn seek_to_offset(&mut self, offset: usize) {
+        let mut entry = &self.block.data[offset..];
+        let prefix = entry.get_u16() as usize;
+        let key_len = entry.get_u16() as usize;
+        let key = &entry[..key_len];
+        self.key.clear();
+        self.key.append(&self.first_key.key_ref()[..prefix]);
+        self.key.append(key);
+        entry.advance(key_len);
+        let value_len = entry.get_u16() as usize;
+        let value_offset_begin = offset + SIZEOF_U16 + SIZEOF_U16 + key_len + SIZEOF_U16;
+        let value_offset_end = value_offset_begin + value_len;
+        self.value_range = (value_offset_begin, value_offset_end);
+        entry.advance(value_len);
     }
 }
