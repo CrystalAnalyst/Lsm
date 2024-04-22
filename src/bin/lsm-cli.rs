@@ -9,12 +9,16 @@ use std::sync::Arc;
 mod wrapper;
 
 /*
-    暂定支持put, delete, get, scan
-    定义命令 -> 把UserInput解析成命令 -> 针对不同命令调用不同方法处理.
+    基本的API: put, delete, get, scan
+    其它API: Init用于初始化(往LsmTree中填充一部分数据以操作), Flush, Compact, Dump和退出命令
 */
 
 #[derive(Debug)]
 enum Command {
+    Init {
+        begin: u64,
+        end: u64,
+    },
     Put {
         key: String,
         value: String,
@@ -29,6 +33,11 @@ enum Command {
         lower: Option<String>,
         upper: Option<String>,
     },
+    Flush,
+    Compact,
+    Dump,
+    Quit,
+    Close,
 }
 
 impl Command {
@@ -53,9 +62,16 @@ impl Command {
             })(i)
         };
 
+        let init = |i| {
+            map(
+                tuple((tag_no_case("init"), space1, uint, space1, uint)),
+                |(_, _, begin, _, end)| Command::Init { begin, end },
+            )(i)
+        };
+
         let put = |i| {
             map(
-                tuple((tag_no_case("put"), space1, uint, space1, uint)),
+                tuple((tag_no_case("put"), space1, string, space1, string)),
                 |(_, _, key, _, value)| Command::Put { key, value },
             )(i)
         };
@@ -81,8 +97,9 @@ impl Command {
                     opt(tuple((space1, string, space1, string))),
                 )),
                 |(_, opt_args)| {
-                    let (begin, end) = opt_args
-                        .map_or((None, None), |(_, begin, _, end)| (Some(begin), Some(end)));
+                    let (begin, end) = opt_args.map_or((None, None), |(_, lower, _, upper)| {
+                        (Some(lower), Some(upper))
+                    });
                     Command::Scan {
                         lower: begin,
                         upper: end,
@@ -91,7 +108,20 @@ impl Command {
             )(i)
         };
 
-        let command = |i| alt((put, del, get, scan))(i);
+        let command = |i| {
+            alt((
+                init,
+                put,
+                del,
+                get,
+                scan,
+                map(tag_no_case("flush"), |_| Command::Flush),
+                map(tag_no_case("compact"), |_| Command::Compact),
+                map(tag_no_case("dump"), |_| Command::Dump),
+                map(tag_no_case("quit"), |_| Command::Quit),
+                map(tag_no_case("close"), |_| Command::Close),
+            ))(i)
+        };
 
         command(input)
             .map(|(_, c)| c)
