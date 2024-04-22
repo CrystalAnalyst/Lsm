@@ -250,3 +250,33 @@ pub struct MiniLsm {
     // maintains a StorageInner inside of it.
     pub(crate) inner: Arc<LsmStorageInner>,
 }
+
+impl MiniLsm {
+    pub fn put() {
+        todo!()
+    }
+
+    pub fn del() {
+        todo!()
+    }
+
+    pub fn get() {
+        todo!()
+    }
+
+    pub fn scan() {
+        todo!()
+    }
+
+    pub fn flush() {
+        todo!()
+    }
+
+    pub fn compact() {
+        todo!()
+    }
+
+    pub fn dump() {
+        todo!()
+    }
+}

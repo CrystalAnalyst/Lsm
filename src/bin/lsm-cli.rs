@@ -5,6 +5,7 @@ use anyhow::Result;
 use lsm::key::KeySlice;
 use lsm::lsm_storage::MiniLsm;
 use rustyline::DefaultEditor;
+use std::fmt::Write;
 use std::sync::Arc;
 mod wrapper;
 
@@ -12,7 +13,6 @@ mod wrapper;
     基本的API: put, delete, get, scan
     其它API: Init用于初始化(往LsmTree中填充一部分数据以操作), Flush, Compact, Dump和退出命令
 */
-
 #[derive(Debug)]
 enum Command {
     Init {
@@ -163,8 +163,96 @@ struct ReplHandler {
 impl ReplHandler {
     /// 根据传入进来的不同命令, 调用lsm树的不同函数,
     /// 并将将处理结果返回.
-    pub fn handle(&self, command: &Command) {
-        todo!()
+    fn handle(&mut self, command: &Command) -> Result<()> {
+        match command {
+            Command::Init { begin, end } => {
+                assert!(*begin <= *end);
+
+                let mut key_format = String::new();
+                let mut value_format = String::new();
+                write!(&mut key_format, "{}", "{}").unwrap();
+                write!(&mut value_format, "value{}@{}", "{}", self.epoch).unwrap();
+
+                let mut success_count = 0;
+                for i in *begin..=*end {
+                    let key = format!("{}", i);
+                    let value = format!("value{}@{}", i, self.epoch);
+
+                    match self.lsm.put(key.as_bytes(), value.as_bytes()) {
+                        Ok(()) => {
+                            success_count += 1;
+                        }
+                        Err(e) => {
+                            println!("Error inserting key {}: {:?}", key, e);
+                        }
+                    }
+                }
+                println!("{} values filled with epoch {}", success_count, self.epoch);
+            }
+
+            Command::Put { key, value } => {
+                self.lsm.put(key.as_bytes(), value.as_bytes())?;
+                println!("Insert a new Key-value pair: {}—{}", key, value);
+            }
+            
+            Command::Del { key } => {
+                self.lsm.delete(key.as_bytes())?;
+                println!("{} deleted", key);
+            }
+            
+            Command::Get { key } => {
+                if let Some(value) = self.lsm.get(key.as_bytes())? {
+                    println!("{}={:?}", key, value);
+                } else {
+                    println!("{} not exist", key);
+                }
+            }
+            
+            Command::Scan { lower, upper } => match (upper, lower) {
+                (None, None) => {
+                    let mut iter = self
+                        .lsm
+                        .scan(std::ops::Bound::Unbounded, std::ops::Bound::Unbounded)?;
+                    let mut cnt = 0;
+                    while iter.is_valid() {
+                        println!(
+                            "{:?}={:?}",
+                            Bytes::copy_from_slice(iter.key()),
+                            Bytes::copy_from_slice(iter.value()),
+                        );
+                        iter.next()?;
+                        cnt += 1;
+                    }
+                    println!();
+                    println!("{} keys scanned", cnt);
+                }
+                (Some(begin), Some(end)) => {
+                    let mut iter = self.lsm.scan(
+                        std::ops::Bound::Included(begin.as_bytes()),
+                        std::ops::Bound::Included(end.as_bytes()),
+                    )?;
+                    let mut cnt = 0;
+                    while iter.is_valid() {
+                        println!(
+                            "{:?}={:?}",
+                            Bytes::copy_from_slice(iter.key()),
+                            Bytes::copy_from_slice(iter.value()),
+                        );
+                        iter.next()?;
+                        cnt += 1;
+                    }
+                    println!();
+                    println!("{} keys scanned", cnt);
+                }
+                _ => {
+                    println!("invalid command");
+                }
+            },
+            _ => {}
+        };
+
+        self.epoch += 1;
+        Ok(())
     }
 }
 
