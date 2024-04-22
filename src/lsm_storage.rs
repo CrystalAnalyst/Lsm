@@ -12,7 +12,7 @@ use crate::{
         concat_iterator::SstConcatIterator, merge_iterator::MergeIterator,
         two_merge_iterator::TwoMergeIterator, StorageIterator,
     },
-    key::KeySlice,
+    key::{KeyBytes, KeySlice},
     lsm_iterator::{FusedIterator, LsmIterator},
     manifest::Manifest,
     mem_table::MemTable,
@@ -252,31 +252,31 @@ pub struct MiniLsm {
 }
 
 impl MiniLsm {
-    pub fn put() {
+    pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
         todo!()
     }
 
-    pub fn del() {
+    pub fn del(&self, key: &[u8]) -> Result<()> {
         todo!()
     }
 
-    pub fn get() {
+    pub fn get(&self, key: &[u8]) -> Result<KeyBytes> {
         todo!()
     }
 
-    pub fn scan() {
+    pub fn scan(&self, lower: Bound<&[u8]>, upper: Bound<&[u8]>) -> Result<TxnIterator> {
         todo!()
     }
 
-    pub fn flush() {
+    pub fn flush(&self) -> Result<()> {
         todo!()
     }
 
-    pub fn compact() {
+    pub fn compact(&self) -> Result<()> {
         todo!()
     }
 
-    pub fn dump() {
+    pub fn dump(&self) -> Result<()> {
         todo!()
     }
 }

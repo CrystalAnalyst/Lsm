@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use anyhow::Result;
+use bytes::Bytes;
 use lsm::key::KeySlice;
 use lsm::lsm_storage::MiniLsm;
 use rustyline::DefaultEditor;
@@ -194,12 +195,12 @@ impl ReplHandler {
                 self.lsm.put(key.as_bytes(), value.as_bytes())?;
                 println!("Insert a new Key-value pair: {}—{}", key, value);
             }
-            
+
             Command::Del { key } => {
                 self.lsm.delete(key.as_bytes())?;
                 println!("{} deleted", key);
             }
-            
+
             Command::Get { key } => {
                 if let Some(value) = self.lsm.get(key.as_bytes())? {
                     println!("{}={:?}", key, value);
@@ -207,7 +208,6 @@ impl ReplHandler {
                     println!("{} not exist", key);
                 }
             }
-            
             Command::Scan { lower, upper } => match (upper, lower) {
                 (None, None) => {
                     let mut iter = self
