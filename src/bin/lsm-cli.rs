@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use bytes::Bytes;
+use lsm::iterators::StorageIterator;
 use lsm::key::KeySlice;
 use lsm::lsm_storage::MiniLsm;
 use rustyline::DefaultEditor;
@@ -178,7 +179,6 @@ impl ReplHandler {
                 for i in *begin..=*end {
                     let key = format!("{}", i);
                     let value = format!("value{}@{}", i, self.epoch);
-
                     match self.lsm.put(key.as_bytes(), value.as_bytes()) {
                         Ok(()) => {
                             success_count += 1;
@@ -197,7 +197,7 @@ impl ReplHandler {
             }
 
             Command::Del { key } => {
-                self.lsm.delete(key.as_bytes())?;
+                self.lsm.del(key.as_bytes())?;
                 println!("{} deleted", key);
             }
 

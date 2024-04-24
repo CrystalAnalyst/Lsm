@@ -24,7 +24,7 @@ use std::{
     ops::Bound,
     path::{Path, PathBuf},
     sync::{atomic::AtomicUsize, Arc},
-    usize,
+    thread, usize,
 };
 
 /// BlockCache for `read block from disk`, this is used when SSTable is built.
@@ -249,18 +249,33 @@ pub enum WriteBatchRecord<T: AsRef<[u8]>> {
 pub struct MiniLsm {
     // maintains a StorageInner inside of it.
     pub(crate) inner: Arc<LsmStorageInner>,
+    // todo : add flush thread and compaction thread.
 }
 
 impl MiniLsm {
-    pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
+    /*----------------Open and Close ------------------*/
+    pub fn open() -> Result<()> {
         todo!()
+    }
+
+    pub fn close() -> Result<()> {
+        todo!()
+    }
+
+    /*----------------Data Manipulation------------------*/
+    pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
+        self.inner.put(key, value)
     }
 
     pub fn del(&self, key: &[u8]) -> Result<()> {
         todo!()
     }
 
-    pub fn get(&self, key: &[u8]) -> Result<KeyBytes> {
+    pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
+        todo!()
+    }
+
+    pub fn write_batch() -> Result<()> {
         todo!()
     }
 
@@ -268,6 +283,7 @@ impl MiniLsm {
         todo!()
     }
 
+    /*----------------Sync and Compaction------------------*/
     pub fn flush(&self) -> Result<()> {
         todo!()
     }
@@ -276,7 +292,7 @@ impl MiniLsm {
         todo!()
     }
 
-    pub fn dump(&self) -> Result<()> {
+    pub fn sync() -> Result<()> {
         todo!()
     }
 }
