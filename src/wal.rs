@@ -15,6 +15,8 @@ use anyhow::{bail, Context, Ok, Result};
 use bytes::{Buf, BufMut, Bytes};
 use crossbeam_skiplist::SkipMap;
 
+use crate::key::KeyBytes;
+
 pub struct Wal {
     file: Arc<Mutex<BufWriter<File>>>,
 }
@@ -33,7 +35,7 @@ impl Wal {
         })
     }
 
-    pub fn recover(path: impl AsRef<Path>, skiplist: &SkipMap<Bytes, Bytes>) -> Result<Self> {
+    pub fn recover(path: impl AsRef<Path>, skiplist: &SkipMap<KeyBytes, Bytes>) -> Result<Self> {
         let mut file = OpenOptions::new()
             .read(true)
             .append(true)
@@ -60,7 +62,7 @@ impl Wal {
             if hasher.finalize() != buf_ptr.get_u32() {
                 bail!("checksum mismatched!");
             }
-            skiplist.insert(key, value);
+            todo!()
         }
         Ok(Self {
             file: Arc::new(Mutex::new(BufWriter::new(file))),

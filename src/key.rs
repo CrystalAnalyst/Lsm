@@ -20,10 +20,12 @@ impl<T: AsRef<[u8]>> Key<T> {
         self.0
     }
 
+    /// return the the length of key solely.
     pub fn key_len(&self) -> usize {
         self.0.as_ref().len()
     }
 
+    /// return the length of key_len plus timestamp.
     pub fn raw_len(&self) -> usize {
         self.key_len() + std::mem::size_of::<u64>()
     }

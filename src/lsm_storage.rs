@@ -152,11 +152,7 @@ impl LsmStorageInner {
         todo!()
     }
 
-    pub fn sync() {
-        todo!()
-    }
-
-    pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
+    pub fn get(self: &Arc<Self>, key: &[u8]) -> Result<Option<Bytes>> {
         todo!()
     }
 
@@ -164,12 +160,12 @@ impl LsmStorageInner {
         todo!()
     }
 
-    pub fn scan(&self, lower: Bound<&[u8]>, upper: Bound<&[u8]>) -> Result<TxnIterator> {
+    pub fn scan(self: &Arc<Self>, lower: Bound<&[u8]>, upper: Bound<&[u8]>) -> Result<TxnIterator> {
         todo!()
     }
 
     pub fn scan_with_ts(
-        self: &Arc<Self>,
+        &self,
         lower: Bound<&[u8]>,
         upper: Bound<&[u8]>,
         read_ts: u64,
@@ -177,11 +173,11 @@ impl LsmStorageInner {
         todo!()
     }
 
-    pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
+    pub fn put(self: &Arc<Self>, key: &[u8], value: &[u8]) -> Result<()> {
         todo!()
     }
 
-    pub fn delete(&self, key: &[u8]) -> Result<()> {
+    pub fn delete(self: &Arc<Self>, key: &[u8]) -> Result<()> {
         todo!()
     }
 
@@ -189,19 +185,22 @@ impl LsmStorageInner {
         self: &Arc<Self>,
         batch: &[WriteBatchRecord<T>],
     ) -> Result<()> {
+        if !self.options.serializable {
+            todo!()
+        }
         todo!()
     }
 
-    /// You should also modify the put, delete, and write_batch interface in LsmStorageInner.
-    /// We recommend you define a helper function `write_batch_inner()` that processes a write batch.
-    /// If options.serializable = true, put, delete, and the user-facing write_batch should create a transaction
-    /// instead of directly creating a write batch.
-    /// Your write batch helper function should also return a u64 commit timestamp
-    /// so that Transaction::Commit can correctly store the committed transaction data into the MVCC structure.
-    pub fn write_batch_inner() -> Result<u64> {
+    /// A helper function `write_batch_inner()` that processes a write batch.
+    /// return a u64 commit timestamp so that Transaction::Commit can correctly
+    /// store the committed transaction data into the MVCC structure.
+    pub fn write_batch_inner<T: AsRef<[u8]>>(&self, batch: &[WriteBatchRecord<T>]) -> Result<u64> {
         todo!()
     }
 
+    pub fn sync() {
+        todo!()
+    }
     /*----------------------------MemTable Management------------------------------*/
     fn try_freeze() {
         todo!()

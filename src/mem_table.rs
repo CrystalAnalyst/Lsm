@@ -1,5 +1,5 @@
 // a basic memtable, based on crossbeam-skiplist.
-#![allow(unused_imports)]
+#![allow(unused)]
 #![allow(dead_code)]
 use anyhow::Result;
 use bytes::Bytes;
@@ -14,7 +14,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use crate::iterators::StorageIterator;
-use crate::key::{Key, KeyBytes, KeySlice};
+use crate::key::{KeyBytes, KeySlice};
+use crate::table::SsTableBuilder;
 use crate::wal::Wal;
 
 /// Create a bound of `Bytes` from a bound of `&[u8]`(Native).
@@ -52,18 +53,14 @@ pub(crate) fn map_key_bound_plus_ts(bound: Bound<&[u8]>, ts: u64) -> Bound<KeySl
 
 /// Data Structure 1: MemTable in the Memory.
 pub struct MemTable {
-    // store the key-value pairs, inside it'a SkipMap.
-    pub(crate) map: Arc<SkipMap<Bytes, Bytes>>,
-    // index of the current memtable.
+    pub(crate) map: Arc<SkipMap<KeyBytes, Bytes>>,
     id: usize,
-    // the approximate_size of the current table.
     approximate_size: Arc<AtomicUsize>,
-    // optional for Write-ahead Log
     wal: Option<Wal>,
 }
 
 impl MemTable {
-    /// create a new memtable with a `specified index`.
+    /*----------------MemTable creation and Initialization------------*/
     pub fn create(id: usize) -> Self {
         Self {
             id,
@@ -92,22 +89,56 @@ impl MemTable {
         })
     }
 
-    /// core functionality 1: get() the pair with a key.
+    /*----------------CRUD API and Data Manipulation------------------*/
     pub fn get(&self, key: &[u8]) -> Option<Bytes> {
-        self.map.get(key).map(|e| e.value().clone())
+        todo!()
     }
 
-    /// core functionality 2: put() the entry with a key-value pair.
+    pub fn scan(&self, lower: Bound<KeySlice>, upper: Bound<KeySlice>) -> Result<MemTableIterator> {
+        let (lower, upper) = (map_key_bound(lower), map_key_bound(upper));
+        let mut iter = MemTableIteratorBuilder {
+            map: self.map.clone(),
+            iter_builder: |map| map.range((lower, upper)),
+            item: (KeyBytes::new(), Bytes::new()),
+        }
+        .build();
+        iter.next().unwrap();
+        Ok(iter)
+    }
+
     pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
-        // pre-calculate the size
+        // 先写WAL, 再写内存.
+        if let Some(ref wal) = self.wal {
+            wal.put(key, value)?;
+        }
+        // 写内存时, 计算大小并及时更新.
         let estimated_size = key.len() + value.len();
-        // insert the key-value pair.
-        self.map
-            .insert(Bytes::copy_from_slice(key), Bytes::copy_from_slice(value));
-        // update the estimated_size.
-        self.approximate_size
-            .fetch_add(estimated_size, std::sync::atomic::Ordering::Relaxed);
+        todo!()
+    }
+
+    /*----------------WAL Management: Flush and Sync------------------*/
+    /// Flush the mem-table to SSTable. Implement in week 1 day 6.
+    pub fn flush(&self, builder: &mut SsTableBuilder) -> Result<()> {
+        for entry in self.map.iter() {
+            builder.add(entry.key().as_key_slice(), &entry.value()[..]);
+        }
         Ok(())
+    }
+
+    pub fn sync_wal(&self) -> Result<()> {
+        if let Some(ref wal) = self.wal {
+            wal.sync()?;
+        }
+        Ok(())
+    }
+
+    /*-----------------Util function for common use-------------------*/
+    pub fn id(&self) -> usize {
+        self.id
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
     }
 
     pub fn approximate_size(&self) -> usize {
@@ -129,7 +160,7 @@ type SkipMapRangeIter<'a> = crossbeam_skiplist::map::Range<
 #[self_referencing]
 pub struct MemTableIterator {
     // store the map, which contain all the key-value pairs.
-    map: Arc<SkipMap<Bytes, Bytes>>,
+    map: Arc<SkipMap<KeyBytes, Bytes>>,
 
     #[borrows(map)] //the iterator `iter` borrows the `map` field
     #[not_covariant] //the iterator is not Covariant along with the struct.
