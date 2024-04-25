@@ -73,6 +73,8 @@ pub struct LsmStorageOptions {
     pub compaction_option: CompactionOptions,
     // serilization or not
     // open WAL or not
+    pub enable_wal: bool,
+    pub serializable: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -106,11 +108,12 @@ pub(crate) struct LsmStorageInner {
 }
 
 impl LsmStorageInner {
-    // boot and Init.
+    /*---------------------------Boost and Init---------------------------------*/
     pub(crate) fn open(path: impl AsRef<Path>, options: LsmStorageOptions) -> Result<Self> {
         todo!()
     }
 
+    /*---------helper functions: Id-generator, MVCC entity and manifest---------*/
     pub fn next_sst_id(&self) -> usize {
         todo!()
     }
@@ -123,6 +126,7 @@ impl LsmStorageInner {
         todo!()
     }
 
+    /*----------------------------Util functions---------------------------------*/
     pub(crate) fn path_of_sst_static(path: impl AsRef<Path>, id: usize) -> PathBuf {
         todo!()
     }
@@ -143,7 +147,7 @@ impl LsmStorageInner {
         todo!()
     }
 
-    // CRUD API
+    /*-----------------------------Txn and CRUD API---------------------------------*/
     pub fn new_txn(&self) -> Result<()> {
         todo!()
     }
@@ -160,7 +164,7 @@ impl LsmStorageInner {
         todo!()
     }
 
-    pub fn scan() {
+    pub fn scan(&self, lower: Bound<&[u8]>, upper: Bound<&[u8]>) -> Result<TxnIterator> {
         todo!()
     }
 
@@ -174,50 +178,31 @@ impl LsmStorageInner {
     }
 
     pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
-        self.write_batch(&[WriteBatchRecord::Put(key, value)])
-    }
-
-    pub fn delete(&self, key: &[u8]) -> Result<()> {
-        self.write_batch(&[WriteBatchRecord::Del(key)])
-    }
-
-    pub fn write_batch<T: AsRef<[u8]>>(&self, batch: &[WriteBatchRecord<T>]) -> Result<()> {
-        for record in batch {
-            match record {
-                WriteBatchRecord::Put(key, value) => {
-                    let key = key.as_ref();
-                    let value = value.as_ref();
-                    assert!(!key.is_empty(), "key should not be emtpy!");
-                    assert!(!value.is_empty(), "value should not be empty!");
-                    let size;
-                    {
-                        let guard = self.state.read();
-                        guard.memtable.put(key, value)?;
-                        size = guard.memtable.approximate_size();
-                    }
-                    todo!()
-                }
-                WriteBatchRecord::Del(key) => {
-                    let key = key.as_ref();
-                    let size;
-                    {
-                        let guard = self.state.read();
-                        // put a TombStone on the specified key.
-                        guard.memtable.put(key, b"")?;
-                        size = guard.memtable.approximate_size();
-                    }
-                    todo!()
-                }
-            }
-        }
-        Ok(())
-    }
-
-    pub fn write_batch_inner() {
         todo!()
     }
 
-    // Memtable Management.
+    pub fn delete(&self, key: &[u8]) -> Result<()> {
+        todo!()
+    }
+
+    pub fn write_batch<T: AsRef<[u8]>>(
+        self: &Arc<Self>,
+        batch: &[WriteBatchRecord<T>],
+    ) -> Result<()> {
+        todo!()
+    }
+
+    /// You should also modify the put, delete, and write_batch interface in LsmStorageInner.
+    /// We recommend you define a helper function `write_batch_inner()` that processes a write batch.
+    /// If options.serializable = true, put, delete, and the user-facing write_batch should create a transaction
+    /// instead of directly creating a write batch.
+    /// Your write batch helper function should also return a u64 commit timestamp
+    /// so that Transaction::Commit can correctly store the committed transaction data into the MVCC structure.
+    pub fn write_batch_inner() -> Result<u64> {
+        todo!()
+    }
+
+    /*----------------------------MemTable Management------------------------------*/
     fn try_freeze() {
         todo!()
     }
@@ -234,7 +219,7 @@ impl LsmStorageInner {
         todo!()
     }
 
-    // Compaction
+    /*------------------------------Compaction Opt----------------------------------*/
     pub fn add_compaction_filter() {
         todo!()
     }
@@ -263,24 +248,24 @@ impl MiniLsm {
     }
 
     /*----------------Data Manipulation------------------*/
+    pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
+        self.inner.get(key)
+    }
+
+    pub fn scan(&self, lower: Bound<&[u8]>, upper: Bound<&[u8]>) -> Result<TxnIterator> {
+        self.inner.scan(lower, upper)
+    }
+
     pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
         self.inner.put(key, value)
     }
 
     pub fn del(&self, key: &[u8]) -> Result<()> {
-        todo!()
+        self.inner.delete(key)
     }
 
-    pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
-        todo!()
-    }
-
-    pub fn write_batch() -> Result<()> {
-        todo!()
-    }
-
-    pub fn scan(&self, lower: Bound<&[u8]>, upper: Bound<&[u8]>) -> Result<TxnIterator> {
-        todo!()
+    pub fn write_batch<T: AsRef<[u8]>>(&self, batch: &[WriteBatchRecord<T>]) -> Result<()> {
+        self.inner.write_batch(batch)
     }
 
     /*----------------Sync and Compaction------------------*/
