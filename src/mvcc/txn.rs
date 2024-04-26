@@ -109,7 +109,7 @@ impl Transaction {
         }
     }
 
-    pub fn commit() {
+    pub fn commit(&self) -> Result<()> {
         todo!()
     }
 }

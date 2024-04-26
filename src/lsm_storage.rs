@@ -16,7 +16,10 @@ use crate::{
     lsm_iterator::{FusedIterator, LsmIterator},
     manifest::Manifest,
     mem_table::MemTable,
-    mvcc::{txn::TxnIterator, LsmMvccInner},
+    mvcc::{
+        txn::{Transaction, TxnIterator},
+        LsmMvccInner,
+    },
     table::{iterator::SsTableIterator, SsTable},
 };
 use std::{
@@ -154,12 +157,13 @@ impl LsmStorageInner {
     }
 
     /*-----------------------------Txn and CRUD API---------------------------------*/
-    pub fn new_txn(&self) -> Result<()> {
-        todo!()
+    pub fn new_txn(self: &Arc<Self>) -> Result<Arc<Transaction>> {
+        Ok(self.mvcc().new_txn(self.clone(), self.options.serializable))
     }
 
     pub fn get(self: &Arc<Self>, key: &[u8]) -> Result<Option<Bytes>> {
-        todo!()
+        let txn = self.mvcc().new_txn(self.clone(), self.options.serializable);
+        txn.get(key)
     }
 
     pub fn get_with_ts(&self, key: &[u8], ts: u64) -> Result<Option<Bytes>> {
@@ -167,7 +171,8 @@ impl LsmStorageInner {
     }
 
     pub fn scan(self: &Arc<Self>, lower: Bound<&[u8]>, upper: Bound<&[u8]>) -> Result<TxnIterator> {
-        todo!()
+        let txn = self.mvcc().new_txn(self.clone(), self.options.serializable);
+        txn.scan(lower, upper)
     }
 
     pub fn scan_with_ts(
@@ -180,11 +185,25 @@ impl LsmStorageInner {
     }
 
     pub fn put(self: &Arc<Self>, key: &[u8], value: &[u8]) -> Result<()> {
-        todo!()
+        if !self.options.serializable {
+            self.write_batch_inner(&[WriteBatchRecord::Put(key, value)])?;
+        } else {
+            let txn = self.mvcc().new_txn(self.clone(), self.options.serializable);
+            txn.put(key, value);
+            txn.commit()?;
+        }
+        Ok(())
     }
 
     pub fn delete(self: &Arc<Self>, key: &[u8]) -> Result<()> {
-        todo!()
+        if !self.options.serializable {
+            self.write_batch_inner(&[WriteBatchRecord::Del(key)])?;
+        } else {
+            let txn = self.mvcc().new_txn(self.clone(), self.options.serializable);
+            txn.delete(key);
+            txn.commit()?;
+        }
+        Ok(())
     }
 
     pub fn write_batch<T: AsRef<[u8]>>(
