@@ -15,7 +15,7 @@ use anyhow::{bail, Context, Ok, Result};
 use bytes::{Buf, BufMut, Bytes};
 use crossbeam_skiplist::SkipMap;
 
-use crate::key::KeyBytes;
+use crate::key::{KeyBytes, KeySlice};
 
 pub struct Wal {
     file: Arc<Mutex<BufWriter<File>>>,
@@ -69,22 +69,21 @@ impl Wal {
         })
     }
 
-    pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
+    pub fn put(&self, key: KeySlice, value: &[u8]) -> Result<()> {
         let mut file = self.file.lock();
         let mut buf: Vec<u8> =
-            Vec::with_capacity(key.len() + value.len() + std::mem::size_of::<u16>());
+            Vec::with_capacity(key.raw_len() + value.len() + std::mem::size_of::<u16>());
         let mut hasher = crc32fast::Hasher::new();
-        // Write key length and key.
-        hasher.write_u16(key.len() as u16);
-        buf.put_u16(key.len() as u16);
-        hasher.write(key);
-        buf.put_slice(key);
-        // Write value length and value.
+        hasher.write_u16(key.key_len() as u16);
+        buf.put_u16(key.key_len() as u16);
+        hasher.write(key.key_ref());
+        buf.put_slice(key.key_ref());
+        hasher.write_u64(key.ts());
+        buf.put_u64(key.ts());
         hasher.write_u16(value.len() as u16);
         buf.put_u16(value.len() as u16);
-        hasher.write(value);
         buf.put_slice(value);
-        // add checksum
+        hasher.write(value);
         buf.put_u32(hasher.finalize());
         file.write_all(&buf)?;
         Ok(())

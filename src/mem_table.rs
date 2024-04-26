@@ -90,8 +90,12 @@ impl MemTable {
     }
 
     /*----------------CRUD API and Data Manipulation------------------*/
-    pub fn get(&self, key: &[u8]) -> Option<Bytes> {
-        todo!()
+    pub fn get(&self, key: KeySlice) -> Option<Bytes> {
+        let key_bytes = KeyBytes::from_bytes_with_ts(
+            Bytes::from_static(unsafe { std::mem::transmute(key.key_ref()) }),
+            key.ts(),
+        );
+        self.map.get(&key_bytes).map(|e| e.value().clone())
     }
 
     pub fn scan(&self, lower: Bound<KeySlice>, upper: Bound<KeySlice>) -> Result<MemTableIterator> {
@@ -106,14 +110,20 @@ impl MemTable {
         Ok(iter)
     }
 
-    pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
+    pub fn put(&self, key: KeySlice, value: &[u8]) -> Result<()> {
         // 先写WAL, 再写内存.
         if let Some(ref wal) = self.wal {
             wal.put(key, value)?;
         }
-        // 写内存时, 计算大小并及时更新.
-        let estimated_size = key.len() + value.len();
-        todo!()
+        // 写内存.
+        let estimated_size = key.raw_len() + value.len();
+        self.map.insert(
+            key.to_key_vec().into_key_bytes(),
+            Bytes::copy_from_slice(value),
+        );
+        self.approximate_size
+            .fetch_add(estimated_size, std::sync::atomic::Ordering::Relaxed);
+        Ok(())
     }
 
     /*----------------WAL Management: Flush and Sync------------------*/
