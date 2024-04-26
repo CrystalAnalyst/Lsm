@@ -21,6 +21,7 @@ use crate::{
 };
 use std::{
     collections::HashMap,
+    fs::File,
     ops::Bound,
     path::{Path, PathBuf},
     sync::{atomic::AtomicUsize, Arc},
@@ -114,37 +115,42 @@ impl LsmStorageInner {
     }
 
     /*---------helper functions: Id-generator, MVCC entity and manifest---------*/
-    pub fn next_sst_id(&self) -> usize {
-        todo!()
+    pub(crate) fn next_sst_id(&self) -> usize {
+        self.next_sst_id
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub fn mvcc(&self) -> &LsmMvccInner {
-        todo!()
+    pub(crate) fn mvcc(&self) -> &LsmMvccInner {
+        self.mvcc.as_ref().unwrap()
     }
 
-    pub fn manifest(&self) -> &Manifest {
-        todo!()
+    pub(crate) fn manifest(&self) -> &Manifest {
+        self.manifest.as_ref().unwrap()
     }
 
     /*----------------------------Util functions---------------------------------*/
-    pub(crate) fn path_of_sst_static(path: impl AsRef<Path>, id: usize) -> PathBuf {
-        todo!()
+
+    /// 根据SST的id, 返回它的实际路径
+    pub(crate) fn path_of_sst(&self, id: usize) -> PathBuf {
+        Self::path_of_sst_static(&self.path, id)
     }
 
-    pub(crate) fn path_of_sst(&self, id: usize) -> PathBuf {
-        todo!()
+    pub(crate) fn path_of_sst_static(path: impl AsRef<Path>, id: usize) -> PathBuf {
+        path.as_ref().join(format!("{:05}.sst", id))
+    }
+
+    ///
+    pub(crate) fn path_of_wal(&self, id: usize) -> PathBuf {
+        Self::path_of_wal_static(&self.path, id)
     }
 
     pub(crate) fn path_of_wal_static(path: impl AsRef<Path>, id: usize) -> PathBuf {
-        todo!()
-    }
-
-    pub(crate) fn path_of_wal(&self, id: usize) -> PathBuf {
-        todo!()
+        path.as_ref().join(format!("{:05}.sst", id))
     }
 
     pub(super) fn sync_dir(&self) -> Result<()> {
-        todo!()
+        File::open(&self.path)?.sync_all()?;
+        Ok(())
     }
 
     /*-----------------------------Txn and CRUD API---------------------------------*/
@@ -201,6 +207,7 @@ impl LsmStorageInner {
     pub fn sync() {
         todo!()
     }
+
     /*----------------------------MemTable Management------------------------------*/
     fn try_freeze() {
         todo!()
