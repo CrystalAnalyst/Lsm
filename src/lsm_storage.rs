@@ -4,6 +4,7 @@
 use anyhow::Result;
 use bytes::Bytes;
 use parking_lot::{Mutex, MutexGuard, RwLock};
+use rustyline::validate;
 
 use crate::{
     block::Block,
@@ -69,9 +70,9 @@ impl LsmStorageState {
 pub struct LsmStorageOptions {
     // configure block size.
     pub block_size: usize,
-    // configure the one SSTable size.
+    // configure the one SSTable/MemTable size.
     pub target_sst_size: usize,
-    // configure the max number of memtables.
+    // configure the max number of memtables(Imms + 1).
     pub max_memtable_limit: usize,
     // Compaction option
     pub compaction_option: CompactionOptions,
@@ -142,7 +143,7 @@ impl LsmStorageInner {
         path.as_ref().join(format!("{:05}.sst", id))
     }
 
-    ///
+    /// 根据Wal的id, 返回它的实际路径
     pub(crate) fn path_of_wal(&self, id: usize) -> PathBuf {
         Self::path_of_wal_static(&self.path, id)
     }
@@ -211,16 +212,60 @@ impl LsmStorageInner {
         batch: &[WriteBatchRecord<T>],
     ) -> Result<()> {
         if !self.options.serializable {
-            todo!()
+            self.write_batch_inner(batch)?;
+        } else {
+            let txn = self.mvcc().new_txn(self.clone(), self.options.serializable);
+            for record in batch {
+                match record {
+                    WriteBatchRecord::Put(key, value) => txn.put(key.as_ref(), value.as_ref()),
+                    WriteBatchRecord::Del(key) => txn.delete(key.as_ref()),
+                }
+                txn.commit()?;
+            }
         }
-        todo!()
+        Ok(())
     }
 
     /// A helper function `write_batch_inner()` that processes a write batch.
     /// return a u64 commit timestamp so that Transaction::Commit can correctly
     /// store the committed transaction data into the MVCC structure.
     pub fn write_batch_inner<T: AsRef<[u8]>>(&self, batch: &[WriteBatchRecord<T>]) -> Result<u64> {
-        todo!()
+        let _lck = self.mvcc().write_lock.lock();
+        let commit_ts = self.mvcc().latest_commit_ts() + 1;
+        for record in batch {
+            match record {
+                WriteBatchRecord::Put(key, value) => {
+                    let key = key.as_ref();
+                    let value = value.as_ref();
+                    assert!(!key.is_empty(), "key cannot be empty!");
+                    assert!(!value.is_empty(), "value cannot be empty!");
+                    let size;
+                    {
+                        let guard = self.state.read();
+                        guard
+                            .memtable
+                            .put(KeySlice::from_slice(key, commit_ts), value)?;
+                        size = guard.memtable.approximate_size();
+                    }
+                    self.try_freeze(size)?;
+                }
+                WriteBatchRecord::Del(key) => {
+                    let key = key.as_ref();
+                    assert!(!key.is_empty(), "key cannot be empty!");
+                    let size;
+                    {
+                        let guard = self.state.read();
+                        guard
+                            .memtable
+                            .put(KeySlice::from_slice(key, commit_ts), b"")?;
+                        size = guard.memtable.approximate_size();
+                    }
+                    self.try_freeze(size)?;
+                }
+            }
+        }
+        self.mvcc().update_commit_ts(commit_ts);
+        Ok(commit_ts)
     }
 
     pub fn sync() {
@@ -228,15 +273,39 @@ impl LsmStorageInner {
     }
 
     /*----------------------------MemTable Management------------------------------*/
-    fn try_freeze() {
-        todo!()
+    fn try_freeze(&self, estimated_size: usize) -> Result<()> {
+        if estimated_size > self.options.target_sst_size {
+            let lock = self.state_lock.lock();
+            let guard = self.state.read();
+            if estimated_size > self.options.target_sst_size {
+                drop(guard);
+                self.force_freeze_memtable(&lock)?;
+            }
+        }
+        Ok(())
     }
 
-    pub fn force_freeze_memtable() {
-        todo!()
+    pub fn force_freeze_memtable(&self, guard: &MutexGuard<'_, ()>) -> Result<()> {
+        let memtable_id = self.next_sst_id();
+        let memtable = if self.options.enable_wal {
+            Arc::new(MemTable::create_with_wal(
+                memtable_id,
+                self.path_of_wal(memtable_id),
+            )?)
+        } else {
+            Arc::new(MemTable::create(memtable_id))
+        };
+        self.freeze_memtable_with_memtable(memtable)?;
+        /*
+        self.manifest().add_record(
+            state_lock_observer,
+            ManifestRecord::NewMemtable(memtable_id),
+        )?; */
+        self.sync_dir()?;
+        Ok(())
     }
 
-    fn freeze_memtable_with_memtable() {
+    fn freeze_memtable_with_memtable(&self, memtable: Arc<MemTable>) -> Result<()> {
         todo!()
     }
 
