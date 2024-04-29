@@ -15,13 +15,13 @@ use crate::{
     },
     key::{KeyBytes, KeySlice},
     lsm_iterator::{FusedIterator, LsmIterator},
-    manifest::Manifest,
+    manifest::{Manifest, ManifestRecord},
     mem_table::MemTable,
     mvcc::{
         txn::{Transaction, TxnIterator},
         LsmMvccInner,
     },
-    table::{iterator::SsTableIterator, SsTable},
+    table::{iterator::SsTableIterator, SsTable, SsTableBuilder},
 };
 use std::{
     collections::HashMap,
@@ -286,6 +286,7 @@ impl LsmStorageInner {
     }
 
     pub fn force_freeze_memtable(&self, guard: &MutexGuard<'_, ()>) -> Result<()> {
+        // step1. generate a new MemTable.
         let memtable_id = self.next_sst_id();
         let memtable = if self.options.enable_wal {
             Arc::new(MemTable::create_with_wal(
@@ -295,22 +296,87 @@ impl LsmStorageInner {
         } else {
             Arc::new(MemTable::create(memtable_id))
         };
+
+        // step2. the actual freeze logic.
         self.freeze_memtable_with_memtable(memtable)?;
-        /*
-        self.manifest().add_record(
-            state_lock_observer,
-            ManifestRecord::NewMemtable(memtable_id),
-        )?; */
+
+        // step3. using manifest to record the ops and sync.
+        self.manifest()
+            .add_record(guard, ManifestRecord::NewMemTable(memtable_id))?;
         self.sync_dir()?;
+
         Ok(())
     }
 
     fn freeze_memtable_with_memtable(&self, memtable: Arc<MemTable>) -> Result<()> {
-        todo!()
+        // step1. get snapshot
+        let mut guard = self.state.write();
+        let mut snapshot = guard.as_ref().clone();
+
+        // step2. remove old memtable and insert it to the imm_list
+        let old_memtable = std::mem::replace(&mut snapshot.memtable, memtable);
+        snapshot.imm_memtables.insert(0, old_memtable.clone());
+
+        // step3. update the state and sync
+        *guard = Arc::new(snapshot);
+        drop(guard);
+        old_memtable.sync_wal()?;
+
+        Ok(())
     }
 
-    pub fn force_flush_next_imm_memtable() {
-        todo!()
+    pub fn force_flush_next_imm_memtable(&self) -> Result<()> {
+        // step1. get the resource ready
+        let state_lock = self.state_lock.lock();
+        let flush_memtable;
+        {
+            let guard = self.state.read();
+            flush_memtable = guard
+                .imm_memtables
+                .last()
+                .expect("No memtable to be flushed!")
+                .clone();
+        }
+
+        // step2. doing on purpose
+        let mut builder = SsTableBuilder::new(self.options.block_size);
+        flush_memtable.flush(&mut builder)?;
+        let sst_id = flush_memtable.id();
+        let sst = Arc::new(builder.build(
+            sst_id,
+            Some(self.block_cache.clone()),
+            self.path_of_sst(sst_id),
+        )?);
+        {
+            let mut guard = self.state.write();
+            let mut snapshot = guard.as_ref().clone();
+
+            let mem = snapshot
+                .imm_memtables
+                .pop()
+                .expect("No memtables to flush!");
+            
+            if self.compaction_controller.flush_to_l0() {
+                // In leveled compaction or no compaction, simply flush to L0
+                snapshot.l0_sstables.insert(0, sst_id);
+            } else {
+                // In tiered compaction, create a new tier
+                snapshot.levels.insert(0, (sst_id, vec![sst_id]));
+            }
+
+            snapshot.sstables.insert(sst_id, sst);
+            *guard = Arc::new(snapshot);
+        }
+
+        // update manifest and sync : wal, manifest and flush to Disk
+        if self.options.enable_wal {
+            std::fs::remove_file(self.path_of_wal(sst_id))?;
+        }
+        self.manifest()
+            .add_record(&state_lock, ManifestRecord::Flush(sst_id))?;
+        self.sync_dir()?;
+
+        Ok(())
     }
 
     /*------------------------------Compaction Opt----------------------------------*/

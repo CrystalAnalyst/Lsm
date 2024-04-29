@@ -26,10 +26,12 @@ pub struct SimpleLeveledCompactionOptions {
 }
 
 impl SimpleLeveledCompactionController {
+    /// Constructor to create a new instance of the controller
     pub fn new(options: SimpleLeveledCompactionOptions) -> Self {
         Self { options }
     }
 
+    /// Generates a compaction task based on the current state.
     pub fn generate_compaction_task(
         &self,
         snapshot: &LsmStorageState,
@@ -71,6 +73,8 @@ impl SimpleLeveledCompactionController {
         None
     }
 
+    /// Applies the compaction result to the snapshot and
+    /// returns the updated snapshot along with the list of files to remove.
     pub fn apply_compaction_result(
         &self,
         snapshot: &LsmStorageState,
