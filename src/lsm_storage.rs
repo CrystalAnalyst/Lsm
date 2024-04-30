@@ -355,7 +355,7 @@ impl LsmStorageInner {
                 .imm_memtables
                 .pop()
                 .expect("No memtables to flush!");
-            
+
             if self.compaction_controller.flush_to_l0() {
                 // In leveled compaction or no compaction, simply flush to L0
                 snapshot.l0_sstables.insert(0, sst_id);
@@ -430,11 +430,11 @@ impl MiniLsm {
 
     /*----------------Sync and Compaction------------------*/
     pub fn flush(&self) -> Result<()> {
-        todo!()
+        self.inner.force_flush_next_imm_memtable()
     }
 
     pub fn compact(&self) -> Result<()> {
-        todo!()
+        self.inner.force_compact()
     }
 
     pub fn sync() -> Result<()> {
