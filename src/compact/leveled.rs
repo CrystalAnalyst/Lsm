@@ -23,7 +23,7 @@ pub struct LeveledCompactionController {
 #[derive(Debug, Clone)]
 pub struct LeveledCompactionOptions {
     pub level_size_multiplier: usize,
-    pub level0_files_num_compaction_threshold: usize,
+    pub level0_file_num_compaction_trigger: usize,
     pub max_levels: usize,
     pub base_level_size_mb: usize,
 }
@@ -100,7 +100,7 @@ impl LeveledCompactionController {
         }
 
         // generate compaction task for Both L0 and other levels.
-        if snapshot.l0_sstables.len() >= self.options.level0_files_num_compaction_threshold {
+        if snapshot.l0_sstables.len() >= self.options.level0_file_num_compaction_trigger {
             return Some(LeveledCompactionTask {
                 upper_level: None,
                 upper_level_ssts_id: snapshot.l0_sstables.clone(),

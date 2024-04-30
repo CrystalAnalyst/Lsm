@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::{
     collections::BTreeMap, ops::Bound, os::unix::fs::MetadataExt, path::Path, sync::Arc,
     time::Duration,
@@ -7,10 +8,7 @@ use anyhow::{bail, Result};
 use bytes::Bytes;
 
 use crate::{
-    compact::{
-        CompactionOptions, LeveledCompactionOptions, SimpleLeveledCompactionOptions,
-        TieredCompactionOptions,
-    },
+    compact::{CompactionOptions, LeveledCompactionOptions},
     iterators::{merge_iterator::MergeIterator, StorageIterator},
     key::{KeySlice, TS_ENABLED},
     lsm_storage::{BlockCache, LsmStorageInner, LsmStorageState, MiniLsm},
@@ -290,7 +288,6 @@ pub fn check_compaction_ratio(storage: Arc<MiniLsm>) {
                 .iter()
                 .map(|x| state.sstables.get(x).as_ref().unwrap().table_size())
                 .sum::<u64>(),
-            CompactionOptions::Simple(_) | CompactionOptions::Tiered(_) => files.len() as u64,
             _ => unreachable!(),
         };
         level_size.push(size);
@@ -303,38 +300,10 @@ pub fn check_compaction_ratio(storage: Arc<MiniLsm>) {
     let num_iters = storage
         .scan(Bound::Unbounded, Bound::Unbounded)
         .unwrap()
-        .num_active_iterators();
+        .number_of_iterators();
     let num_memtables = storage.inner.state.read().imm_memtables.len() + 1;
     match compaction_options {
         CompactionOptions::NoCompaction => unreachable!(),
-        CompactionOptions::Simple(SimpleLeveledCompactionOptions {
-            size_ratio_percent,
-            level0_file_num_compaction_trigger,
-            max_levels,
-        }) => {
-            assert!(l0_sst_num < level0_file_num_compaction_trigger);
-            assert!(level_size.len() <= max_levels);
-            for idx in 1..level_size.len() {
-                let prev_size = level_size[idx - 1];
-                let this_size = level_size[idx];
-                if prev_size == 0 && this_size == 0 {
-                    continue;
-                }
-                assert!(
-                    this_size as f64 / prev_size as f64 >= size_ratio_percent as f64 / 100.0,
-                    "L{}/L{}, {}/{}<{}%",
-                    state.levels[idx - 1].0,
-                    state.levels[idx].0,
-                    this_size,
-                    prev_size,
-                    size_ratio_percent
-                );
-            }
-            assert!(
-                num_iters <= l0_sst_num + num_memtables + max_levels + extra_iterators,
-                "we found {num_iters} iterators in your implementation, (l0_sst_num={l0_sst_num}, num_memtables={num_memtables}, max_levels={max_levels}) did you use concat iterators?"
-            );
-        }
         CompactionOptions::Leveled(LeveledCompactionOptions {
             level_size_multiplier,
             level0_file_num_compaction_trigger,
@@ -361,48 +330,6 @@ pub fn check_compaction_ratio(storage: Arc<MiniLsm>) {
             assert!(
                 num_iters <= l0_sst_num + num_memtables + max_levels + extra_iterators,
                 "we found {num_iters} iterators in your implementation, (l0_sst_num={l0_sst_num}, num_memtables={num_memtables}, max_levels={max_levels}) did you use concat iterators?"
-            );
-        }
-        CompactionOptions::Tiered(TieredCompactionOptions {
-            num_tiers,
-            max_size_amplification_percent,
-            size_ratio,
-            min_merge_width,
-        }) => {
-            let size_ratio_trigger = (100.0 + size_ratio as f64) / 100.0;
-            assert_eq!(l0_sst_num, 0);
-            assert!(level_size.len() <= num_tiers);
-            let mut sum_size = level_size[0];
-            for idx in 1..level_size.len() {
-                let this_size = level_size[idx];
-                if level_size.len() > min_merge_width {
-                    assert!(
-                        sum_size as f64 / this_size as f64 <= size_ratio_trigger,
-                        "violation of size ratio: sum(⬆️L{})/L{}, {}/{}>{}",
-                        state.levels[idx - 1].0,
-                        state.levels[idx].0,
-                        sum_size,
-                        this_size,
-                        size_ratio_trigger
-                    );
-                }
-                if idx + 1 == level_size.len() {
-                    assert!(
-                        sum_size as f64 / this_size as f64
-                            <= max_size_amplification_percent as f64 / 100.0,
-                        "violation of space amp: sum(⬆️L{})/L{}, {}/{}>{}%",
-                        state.levels[idx - 1].0,
-                        state.levels[idx].0,
-                        sum_size,
-                        this_size,
-                        max_size_amplification_percent
-                    );
-                }
-                sum_size += this_size;
-            }
-            assert!(
-                num_iters <= num_memtables + num_tiers + extra_iterators,
-                "we found {num_iters} iterators in your implementation, (num_memtables={num_memtables}, num_tiers={num_tiers}) did you use concat iterators?"
             );
         }
     }

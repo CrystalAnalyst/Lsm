@@ -75,7 +75,7 @@ pub struct LsmStorageOptions {
     // configure the max number of memtables(Imms + 1).
     pub max_memtable_limit: usize,
     // Compaction option
-    pub compaction_option: CompactionOptions,
+    pub compaction_options: CompactionOptions,
     // serilization or not
     // open WAL or not
     pub enable_wal: bool,
