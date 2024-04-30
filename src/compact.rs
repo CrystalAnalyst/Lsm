@@ -38,7 +38,7 @@ impl CompactionController {
     pub fn apply_compaction_result(
         &self,
         snapshot: &LsmStorageState,
-        task: CompactionTask,
+        task: &CompactionTask,
         output: &[usize],
     ) -> (LsmStorageState, Vec<usize>) {
         todo!()
@@ -60,6 +60,10 @@ pub enum CompactionOptions {
 impl LsmStorageInner {
     /* ----------compact logic----------- */
     pub fn force_compact(&self) -> Result<()> {
+        let snapshot = {
+            let state = self.state.read();
+            state.clone()
+        };
         todo!()
     }
 

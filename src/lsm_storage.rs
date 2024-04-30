@@ -1,14 +1,14 @@
 #![allow(unused)]
 #![allow(dead_code)]
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use bytes::Bytes;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use rustyline::validate;
 
 use crate::{
     block::Block,
-    compact::{CompactionController, CompactionOptions},
+    compact::{CompactionController, CompactionOptions, LeveledCompactionController},
     iterators::{
         concat_iterator::SstConcatIterator, merge_iterator::MergeIterator,
         two_merge_iterator::TwoMergeIterator, StorageIterator,
@@ -21,10 +21,10 @@ use crate::{
         txn::{Transaction, TxnIterator},
         LsmMvccInner,
     },
-    table::{iterator::SsTableIterator, SsTable, SsTableBuilder},
+    table::{iterator::SsTableIterator, FileObject, SsTable, SsTableBuilder},
 };
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     fs::File,
     ops::Bound,
     path::{Path, PathBuf},
@@ -115,7 +115,126 @@ pub(crate) struct LsmStorageInner {
 impl LsmStorageInner {
     /*---------------------------Boost and Init---------------------------------*/
     pub(crate) fn open(path: impl AsRef<Path>, options: LsmStorageOptions) -> Result<Self> {
-        todo!()
+        let mut state = LsmStorageState::create(&options);
+        let path = path.as_ref();
+        let mut next_sst_id = 1;
+        let block_cache = Arc::new(BlockCache::new(1 << 20)); // 4GB block cache,
+        let manifest;
+        let compaction_controller = match &options.compaction_options {
+            CompactionOptions::Leveled(options) => {
+                CompactionController::Leveled(LeveledCompactionController::new(options.clone()))
+            }
+            _ => {
+                todo!()
+            }
+        };
+        if !path.exists() {
+            std::fs::create_dir_all(path).context("failed to create DB dir")?;
+        }
+        let manifest_path = path.join("MANIFEST");
+        let mut last_commit_ts = 0;
+        if !manifest_path.exists() {
+            if options.enable_wal {
+                state.memtable = Arc::new(MemTable::create_with_wal(
+                    state.memtable.id(),
+                    Self::path_of_wal_static(path, state.memtable.id()),
+                )?);
+            }
+            manifest = Manifest::create(&manifest_path).context("failed to create manifest")?;
+            manifest.add_record_when_init(ManifestRecord::NewMemTable(state.memtable.id()))?;
+        } else {
+            let (m, records) = Manifest::recover(&manifest_path)?;
+            let mut memtables = BTreeSet::new();
+            for record in records {
+                match record {
+                    ManifestRecord::Flush(sst_id) => {
+                        let res = memtables.remove(&sst_id);
+                        assert!(res, "memtable not exist?");
+                        if compaction_controller.flush_to_l0() {
+                            state.l0_sstables.insert(0, sst_id);
+                        } else {
+                            state.levels.insert(0, (sst_id, vec![sst_id]));
+                        }
+                        next_sst_id = next_sst_id.max(sst_id);
+                    }
+                    ManifestRecord::NewMemTable(x) => {
+                        next_sst_id = next_sst_id.max(x);
+                        memtables.insert(x);
+                    }
+                    ManifestRecord::Compaction(task, output) => {
+                        let (new_state, _) =
+                            compaction_controller.apply_compaction_result(&state, &task, &output);
+                        // TODO: apply remove again
+                        state = new_state;
+                        next_sst_id =
+                            next_sst_id.max(output.iter().max().copied().unwrap_or_default());
+                    }
+                }
+            }
+            let mut sst_cnt = 0;
+            // recover SSTs
+            for table_id in state
+                .l0_sstables
+                .iter()
+                .chain(state.levels.iter().flat_map(|(_, files)| files))
+            {
+                let table_id = *table_id;
+                let sst = SsTable::open(
+                    table_id,
+                    Some(block_cache.clone()),
+                    FileObject::open(&Self::path_of_sst_static(path, table_id))
+                        .context("failed to open SST")?,
+                )?;
+                last_commit_ts = last_commit_ts.max(sst.max_ts());
+                state.sstables.insert(table_id, Arc::new(sst));
+                sst_cnt += 1;
+            }
+            println!("{} SSTs opened", sst_cnt);
+            next_sst_id += 1;
+            // recover memtables
+            if options.enable_wal {
+                let mut wal_cnt = 0;
+                for id in memtables.iter() {
+                    let memtable =
+                        MemTable::recover_from_wal(*id, Self::path_of_wal_static(path, *id))?;
+                    let max_ts = memtable
+                        .map
+                        .iter()
+                        .map(|x| x.key().ts())
+                        .max()
+                        .unwrap_or_default();
+                    last_commit_ts = last_commit_ts.max(max_ts);
+                    if !memtable.is_empty() {
+                        state.imm_memtables.insert(0, Arc::new(memtable));
+                        wal_cnt += 1;
+                    }
+                }
+                println!("{} WALs recovered", wal_cnt);
+                state.memtable = Arc::new(MemTable::create_with_wal(
+                    next_sst_id,
+                    Self::path_of_wal_static(path, next_sst_id),
+                )?);
+            } else {
+                state.memtable = Arc::new(MemTable::create(next_sst_id));
+            }
+            m.add_record_when_init(ManifestRecord::NewMemTable(state.memtable.id()))?;
+            next_sst_id += 1;
+            manifest = m;
+        };
+        let storage = Self {
+            state: Arc::new(RwLock::new(Arc::new(state))),
+            state_lock: Mutex::new(()),
+            path: path.to_path_buf(),
+            block_cache,
+            next_sst_id: AtomicUsize::new(next_sst_id),
+            compaction_controller,
+            manifest: Some(manifest),
+            options: options.into(),
+            mvcc: Some(LsmMvccInner::new(last_commit_ts)),
+            compaction_filters: Arc::new(Mutex::new(Vec::new())),
+        };
+        storage.sync_dir()?;
+        Ok(storage)
     }
 
     /*---------helper functions: Id-generator, MVCC entity and manifest---------*/
@@ -268,8 +387,8 @@ impl LsmStorageInner {
         Ok(commit_ts)
     }
 
-    pub fn sync() {
-        todo!()
+    pub fn sync(&self) -> Result<()> {
+        self.state.read().memtable.sync_wal()
     }
 
     /*----------------------------MemTable Management------------------------------*/
@@ -395,12 +514,27 @@ pub struct MiniLsm {
     // maintains a StorageInner inside of it.
     pub(crate) inner: Arc<LsmStorageInner>,
     // todo : add flush thread and compaction thread.
+    compaction_thread: Mutex<Option<std::thread::JoinHandle<()>>>,
+    comapction_notifier: crossbeam::channel::Sender<()>,
+    flush_thread: Mutex<Option<std::thread::JoinHandle<()>>>,
+    flush_notifier: crossbeam::channel::Sender<()>,
 }
 
 impl MiniLsm {
     /*----------------Open and Close ------------------*/
-    pub fn open() -> Result<()> {
-        todo!()
+    pub fn open(path: impl AsRef<Path>, options: LsmStorageOptions) -> Result<Arc<Self>> {
+        let inner = Arc::new(LsmStorageInner::open(path, options)?);
+        let (tx1, rx) = crossbeam::channel::unbounded();
+        let compaction_thread = Mutex::new(inner.spawn_compaction_thread(rx)?);
+        let (tx2, rx) = crossbeam::channel::unbounded();
+        let flush_thread = Mutex::new(inner.spawn_flush_thread(rx)?);
+        Ok(Arc::new(Self {
+            inner,
+            comapction_notifier: tx1,
+            compaction_thread,
+            flush_notifier: tx2,
+            flush_thread,
+        }))
     }
 
     pub fn close() -> Result<()> {
@@ -437,7 +571,7 @@ impl MiniLsm {
         self.inner.force_compact()
     }
 
-    pub fn sync() -> Result<()> {
-        todo!()
+    pub fn sync(&self) -> Result<()> {
+        self.inner.sync()
     }
 }

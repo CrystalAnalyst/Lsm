@@ -89,6 +89,8 @@ impl Wal {
         Ok(())
     }
 
+    /// ensure that any data written to the Write-Ahead Log (WAL)
+    /// is flushed to disk and synchronized across storage devices.
     pub fn sync(&self) -> Result<()> {
         let mut file = self.file.lock();
         // write buffered data(in the file) to the OS.
