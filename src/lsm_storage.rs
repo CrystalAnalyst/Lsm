@@ -537,7 +537,19 @@ impl MiniLsm {
         }))
     }
 
-    pub fn close() -> Result<()> {
+    /// Ensuring a graceful shutdown is crucial for data integrity and system stability,
+    /// especially in storage systems where data persistence and consistency are paramount.
+    /// By properly synchronizing and joining threads, flushing pending changes,
+    /// and handling remaining in-memory data, the close method helps maintain
+    /// the reliability and consistency of the LSM storage system during shutdown.
+    pub fn close(&self) -> Result<()> {
+        // sync and shutdown background threads
+        self.inner.sync_dir()?;
+        self.flush_notifier.send(()).ok();
+        self.comapction_notifier.send(()).ok();
+        // check MemTable ( freeze & flush)
+
+        // check Wal and Manifest
         todo!()
     }
 
