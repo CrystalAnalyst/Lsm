@@ -545,12 +545,51 @@ impl MiniLsm {
     pub fn close(&self) -> Result<()> {
         // sync and shutdown background threads
         self.inner.sync_dir()?;
+
         self.flush_notifier.send(()).ok();
         self.comapction_notifier.send(()).ok();
-        // check MemTable ( freeze & flush)
+        let mut compaction_thread = self.compaction_thread.lock();
+        if let Some(compaction_thread) = compaction_thread.take() {
+            compaction_thread
+                .join()
+                .map_err(|e| anyhow::anyhow!("{:?}", e))?;
+        }
+        let mut flush_thread = self.flush_thread.lock();
+        if let Some(flush_thread) = flush_thread.take() {
+            flush_thread
+                .join()
+                .map_err(|e| anyhow::anyhow!("{:?}", e))?;
+        }
+        // When WAL is enabled, any changes made to the data are first recorded
+        // in the WAL before they are applied to the main data store.
+        // Therefore, even if there are remaining memtables in memory
+        // that have not been flushed to disk,
+        // their changes are already captured in the WAL.
+        // So we can directly return Ok(()) here.
+        if self.inner.options.enable_wal {
+            self.inner.sync()?;
+            self.inner.sync_dir()?;
+            return Ok(());
+        }
 
-        // check Wal and Manifest
-        todo!()
+        // check MemTable ( freeze & flush )
+        // Chain of Thoughts: Freeze current MemTable and force flush it to disk.
+        if !self.inner.state.read().memtable.is_empty() {
+            self.inner
+                .freeze_memtable_with_memtable(Arc::new(MemTable::create(
+                    self.inner.next_sst_id(),
+                )))?;
+        }
+        while {
+            let snapshot = self.inner.state.read();
+            !snapshot.imm_memtables.is_empty()
+        } {
+            // flush the pending MemTable to disk to persist.
+            self.inner.force_flush_next_imm_memtable()?;
+        }
+        self.inner.sync_dir()?;
+
+        Ok(())
     }
 
     /*----------------Data Manipulation------------------*/
