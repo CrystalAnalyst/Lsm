@@ -499,7 +499,7 @@ impl LsmStorageInner {
     }
 
     /*------------------------------Compaction Opt----------------------------------*/
-    pub fn add_compaction_filter() {
+    pub fn add_compaction_filter(&self, compaction_filter: CompactionFilter) {
         todo!()
     }
 }
@@ -560,6 +560,7 @@ impl MiniLsm {
                 .join()
                 .map_err(|e| anyhow::anyhow!("{:?}", e))?;
         }
+
         // When WAL is enabled, any changes made to the data are first recorded
         // in the WAL before they are applied to the main data store.
         // Therefore, even if there are remaining memtables in memory
@@ -567,13 +568,15 @@ impl MiniLsm {
         // their changes are already captured in the WAL.
         // So we can directly return Ok(()) here.
         if self.inner.options.enable_wal {
+            // Sync wal.
             self.inner.sync()?;
+            // Sync all the LsmStorageInner.
             self.inner.sync_dir()?;
             return Ok(());
         }
 
-        // check MemTable ( freeze & flush )
-        // Chain of Thoughts: Freeze current MemTable and force flush it to disk.
+        // If No Wal, then check MemTable ( freeze & flush )
+        // Chain of Thoughts: Freeze current MemTable and force all flush to the disk.
         if !self.inner.state.read().memtable.is_empty() {
             self.inner
                 .freeze_memtable_with_memtable(Arc::new(MemTable::create(
@@ -593,6 +596,10 @@ impl MiniLsm {
     }
 
     /*----------------Data Manipulation------------------*/
+    pub fn new_txn(&self) -> Result<Arc<Transaction>> {
+        self.inner.new_txn()
+    }
+
     pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
         self.inner.get(key)
     }
@@ -615,11 +622,22 @@ impl MiniLsm {
 
     /*----------------Sync and Compaction------------------*/
     pub fn flush(&self) -> Result<()> {
-        self.inner.force_flush_next_imm_memtable()
+        if !self.inner.state.read().memtable.is_empty() {
+            self.inner
+                .force_freeze_memtable(&self.inner.state_lock.lock())?;
+        }
+        if !self.inner.state.read().imm_memtables.is_empty() {
+            self.inner.force_flush_next_imm_memtable()?;
+        }
+        Ok(())
     }
 
     pub fn compact(&self) -> Result<()> {
         self.inner.force_compact()
+    }
+
+    pub fn add_compaction_filter(&self, compaction_filter: CompactionFilter) {
+        self.inner.add_compaction_filter(compaction_filter)
     }
 
     pub fn sync(&self) -> Result<()> {
