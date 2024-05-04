@@ -10,10 +10,10 @@ use crate::{compact::leveled, lsm_storage::LsmStorageState};
 pub struct LeveledCompactionTask {
     // if upper_level is None, means L0-compaction.
     pub upper_level: Option<usize>,
-    pub upper_level_ssts_id: Vec<usize>,
+    pub upper_level_sst_ids: Vec<usize>,
     pub lower_level: usize,
-    pub lower_level_ssts_id: Vec<usize>,
-    pub is_lower_level_the_bottom: bool,
+    pub lower_level_sst_ids: Vec<usize>,
+    pub is_lower_level_bottom_level: bool,
 }
 
 pub struct LeveledCompactionController {
@@ -103,14 +103,14 @@ impl LeveledCompactionController {
         if snapshot.l0_sstables.len() >= self.options.level0_file_num_compaction_trigger {
             return Some(LeveledCompactionTask {
                 upper_level: None,
-                upper_level_ssts_id: snapshot.l0_sstables.clone(),
+                upper_level_sst_ids: snapshot.l0_sstables.clone(),
                 lower_level: base_level,
-                lower_level_ssts_id: self.find_overlaping_ssts(
+                lower_level_sst_ids: self.find_overlaping_ssts(
                     snapshot,
                     &snapshot.l0_sstables,
                     base_level,
                 ),
-                is_lower_level_the_bottom: base_level == self.options.max_levels,
+                is_lower_level_bottom_level: base_level == self.options.max_levels,
             });
         }
         let mut priority = Vec::with_capacity(self.options.max_levels);
@@ -125,10 +125,10 @@ impl LeveledCompactionController {
             let select_sst = snapshot.levels[level - 1].1.iter().min().copied().unwrap();
             return Some(LeveledCompactionTask {
                 upper_level: Some(level),
-                upper_level_ssts_id: vec![select_sst],
+                upper_level_sst_ids: vec![select_sst],
                 lower_level: level + 1,
-                lower_level_ssts_id: self.find_overlaping_ssts(snapshot, &[select_sst], level + 1),
-                is_lower_level_the_bottom: level + 1 == self.options.max_levels,
+                lower_level_sst_ids: self.find_overlaping_ssts(snapshot, &[select_sst], level + 1),
+                is_lower_level_bottom_level: level + 1 == self.options.max_levels,
             });
         }
         None
@@ -143,12 +143,12 @@ impl LeveledCompactionController {
         let mut snapshot = snapshot.clone();
         let mut files_to_remove = Vec::new();
         let mut upper_level_sst_ids_set = task
-            .upper_level_ssts_id
+            .upper_level_sst_ids
             .iter()
             .copied()
             .collect::<HashSet<_>>();
         let mut lower_level_sst_ids_set = task
-            .lower_level_ssts_id
+            .lower_level_sst_ids
             .iter()
             .copied()
             .collect::<HashSet<_>>();
@@ -178,8 +178,8 @@ impl LeveledCompactionController {
             snapshot.l0_sstables = new_l0_ssts;
         }
 
-        files_to_remove.extend(&task.upper_level_ssts_id);
-        files_to_remove.extend(&task.lower_level_ssts_id);
+        files_to_remove.extend(&task.upper_level_sst_ids);
+        files_to_remove.extend(&task.lower_level_sst_ids);
 
         let mut new_lower_level_ssts = snapshot.levels[task.lower_level - 1]
             .1
