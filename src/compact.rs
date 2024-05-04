@@ -4,7 +4,7 @@ mod leveled;
 
 use crate::iterators::*;
 use crate::key::KeySlice;
-use crate::table::{SsTable, SsTableIterator};
+use crate::table::{SsTable, SsTableBuilder, SsTableIterator};
 use crate::{iterators::StorageIterator, manifest::ManifestRecord};
 use anyhow::Result;
 use crossbeam::channel::{self, Receiver};
@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::lsm_storage::{LsmStorageInner, LsmStorageState};
+use crate::lsm_storage::{CompactionFilter, LsmStorageInner, LsmStorageState};
 
 use self::concat_iterator::SstConcatIterator;
 pub use self::leveled::LeveledCompactionOptions;
@@ -216,12 +216,96 @@ impl LsmStorageInner {
         }
     }
 
+    /// compact and organize data stored in the LSM storage engine into SSTables.
+    /// responsible for generating new SSTables during compaction.
     fn compact_generate_sst(
         &self,
         mut iter: impl for<'a> StorageIterator<KeyType<'a> = KeySlice<'a>>,
         compact_to_bottom_level: bool,
     ) -> Result<Vec<Arc<SsTable>>> {
-        todo!()
+        let mut builder = None;
+        let mut new_sst = Vec::new();
+        let watermark = self.mvcc().watermark();
+        let mut last_key = Vec::<u8>::new();
+        let mut first_key_below_watermark = false;
+        let compaction_filters = self.compaction_filters.lock().clone();
+        'outer: while iter.is_valid() {
+            if builder.is_none() {
+                builder = Some(SsTableBuilder::new(self.options.block_size));
+            }
+
+            let same_as_last_key = iter.key().key_ref() == last_key;
+            if !same_as_last_key {
+                first_key_below_watermark = true;
+            }
+
+            if compact_to_bottom_level
+                && !same_as_last_key
+                && iter.key().ts() <= watermark
+                && iter.value().is_empty()
+            {
+                last_key.clear();
+                last_key.extend(iter.key().key_ref());
+                iter.next()?;
+                first_key_below_watermark = false;
+                continue;
+            }
+
+            if iter.key().ts() <= watermark {
+                if same_as_last_key && !first_key_below_watermark {
+                    iter.next()?;
+                    continue;
+                }
+
+                first_key_below_watermark = false;
+
+                if !compaction_filters.is_empty() {
+                    for filter in &compaction_filters {
+                        match filter {
+                            CompactionFilter::Prefix(x) => {
+                                if iter.key().key_ref().starts_with(x) {
+                                    iter.next()?;
+                                    continue 'outer;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            let builder_inner = builder.as_mut().unwrap();
+            if builder_inner.estimate_size() >= self.options.target_sst_size && !same_as_last_key {
+                let sst_id = self.next_sst_id();
+                let old_builder = builder.take().unwrap();
+                let sst = Arc::new(old_builder.build(
+                    sst_id,
+                    Some(self.block_cache.clone()),
+                    self.path_of_sst(sst_id),
+                )?);
+                new_sst.push(sst);
+                builder = Some(SsTableBuilder::new(self.options.block_size));
+            }
+
+            let builder_inner = builder.as_mut().unwrap();
+            builder_inner.add(iter.key(), iter.value());
+
+            if !same_as_last_key {
+                last_key.clear();
+                last_key.extend(iter.key().key_ref());
+            }
+
+            iter.next()?;
+        }
+        if let Some(builder) = builder {
+            let sst_id = self.next_sst_id(); // lock dropped here
+            let sst = Arc::new(builder.build(
+                sst_id,
+                Some(self.block_cache.clone()),
+                self.path_of_sst(sst_id),
+            )?);
+            new_sst.push(sst);
+        }
+        Ok(new_sst)
     }
 
     /* --------background thread---------- */
