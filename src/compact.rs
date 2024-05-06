@@ -12,13 +12,15 @@ pub use leveled::{LeveledCompactionController, LeveledCompactionTask};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
-
-use crate::lsm_storage::{CompactionFilter, LsmStorageInner, LsmStorageState};
+use std::thread;
+use std::time::Duration;
 
 use self::concat_iterator::SstConcatIterator;
 pub use self::leveled::LeveledCompactionOptions;
 use self::merge_iterator::MergeIterator;
 use self::two_merge_iterator::TwoMergeIterator;
+use crate::lsm_storage::{CompactionFilter, LsmStorageInner, LsmStorageState};
+use crossbeam::select;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CompactionTask {
@@ -313,21 +315,119 @@ impl LsmStorageInner {
         self: &Arc<Self>,
         rx: channel::Receiver<()>,
     ) -> Result<Option<std::thread::JoinHandle<()>>> {
-        todo!()
+        if let CompactionOptions::Leveled(_) = self.options.compaction_options {
+            let this = self.clone();
+            let handle = std::thread::spawn(move || {
+                let ticker = channel::tick(Duration::from_millis(50));
+                loop {
+                    channel::select! {
+                        recv(ticker) -> _ => if let Err(e) = this.trigger_compaction() {
+                            eprintln!("compaction failed: {}", e);
+                        },
+                        recv(rx) -> _ => return
+                    }
+                }
+            });
+            return Ok(Some(handle));
+        }
+        Ok(None)
     }
 
+    /// Initiates the compaction process within the storage system.
     fn trigger_compaction(&self) -> Result<()> {
-        todo!()
+        // Retrieves a snapshot of the current storage system state.
+        let snapshot = {
+            let state = self.state.read();
+            state.clone()
+        };
+        // Generates a compaction task based on the snapshot
+        // using the compaction controller.
+        // If no compaction task is generated (indicating no compaction is needed),
+        // returns early with Ok(()).
+        let task = self
+            .compaction_controller
+            .generate_compaction_task(&snapshot);
+        let Some(task) = task else {
+            return Ok(());
+        };
+        self.dump_structure();
+        println!("running compaction task: {:?}", task);
+        // Executes the compaction task by calling the compact_inner function,
+        // which compacts the data according to the task.
+        let sstables = self.compact_inner(&task)?;
+        // Updates the state by applying the compaction result and synchronizing the directory.
+        let output = sstables.iter().map(|x| x.sst_id()).collect::<Vec<_>>();
+        // Removes old SSTables that were replaced during compaction and synchronizes the directory again for cleanup.
+        let ssts_to_remove = {
+            // Preparation and Setup:
+            let state_lock = self.state_lock.lock();
+            let mut snapshot = self.state.read().as_ref().clone();
+            let mut new_sst_ids = Vec::new();
+            // Compaction Operations: file_to_add, ssts_to_remove
+            for file_to_add in sstables {
+                new_sst_ids.push(file_to_add.sst_id());
+                let result = snapshot.sstables.insert(file_to_add.sst_id(), file_to_add);
+                assert!(result.is_none());
+            }
+            // Apply the compaction result to the snapshot
+            // which may involve removing old SSTables.
+            let (mut snapshot, files_to_remove) = self
+                .compaction_controller
+                .apply_compaction_result(&snapshot, &task, &output);
+            let mut ssts_to_remove = Vec::with_capacity(files_to_remove.len());
+            for file_to_remove in &files_to_remove {
+                let result = snapshot.sstables.remove(file_to_remove);
+                assert!(result.is_some(), "cannot remove {}.sst", file_to_remove);
+                ssts_to_remove.push(result.unwrap());
+            }
+            let mut state = self.state.write();
+            *state = Arc::new(snapshot);
+            drop(state);
+            // finish touch: Sync and Updates
+            self.sync_dir()?;
+            self.manifest()
+                .add_record(&state_lock, ManifestRecord::Compaction(task, new_sst_ids))?;
+            ssts_to_remove
+        };
+        println!(
+            "compaction finished: {} files removed, {} files added, output={:?}",
+            ssts_to_remove.len(),
+            output.len(),
+            output
+        );
+        for sst in ssts_to_remove {
+            std::fs::remove_file(self.path_of_sst(sst.sst_id()))?;
+        }
+        self.sync_dir()?;
+
+        Ok(())
     }
 
     pub(crate) fn spawn_flush_thread(
         self: &Arc<Self>,
         rx: channel::Receiver<()>,
     ) -> Result<Option<std::thread::JoinHandle<()>>> {
-        todo!()
+        let this = self.clone();
+        let handle = thread::spawn(move || {
+            let ticker = channel::tick(Duration::from_millis(50));
+            channel::select! {
+                recv(ticker) -> _ => if let Err(e) = this.trigger_flush() {
+                    eprintln!("error occured: {}!",e);
+                },
+                recv(rx) -> _ => return
+            }
+        });
+        Ok(Some(handle))
     }
 
     fn trigger_flush(&self) -> Result<()> {
-        todo!()
+        let cond = {
+            let state = self.state.read();
+            state.imm_memtables.len() >= self.options.max_memtable_limit
+        };
+        if cond {
+            self.force_flush_next_imm_memtable()?;
+        }
+        Ok(())
     }
 }
