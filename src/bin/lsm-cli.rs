@@ -5,8 +5,9 @@ use anyhow::Result;
 use bytes::Bytes;
 use lsm::iterators::StorageIterator;
 use lsm::key::KeySlice;
-use lsm::lsm_storage::MiniLsm;
+use lsm::lsm_storage::{LsmStorageOptions, MiniLsm};
 use rustyline::DefaultEditor;
+use std::env::Args;
 use std::fmt::Write;
 use std::sync::Arc;
 mod wrapper;
@@ -135,6 +136,8 @@ impl Command {
 /// Read，读取用户输入 -> Eval, 执行输入内容(放在handler里面)
 /// Print 打印输出结果 -> Loop, 不断循环以上步骤
 pub struct Repl {
+    app_name: String,
+    description: String,
     prompt: String,
     editor: DefaultEditor,
     handler: ReplHandler,
@@ -154,6 +157,47 @@ impl Repl {
             // 调用.handle()方法进行处理. repeat
             self.handler.handle(&command);
         }
+    }
+}
+
+struct ReplBuilder {
+    app_name: String,
+    description: String,
+    prompt: String,
+}
+
+impl ReplBuilder {
+    pub fn new() -> Self {
+        Self {
+            app_name: "mini-lsm-cli".to_string(),
+            description: "A CLI for mini-lsm".to_string(),
+            prompt: "mini-lsm-cli> ".to_string(),
+        }
+    }
+
+    pub fn app_name(mut self, app_name: &str) -> Self {
+        self.app_name = app_name.to_string();
+        self
+    }
+
+    pub fn description(mut self, description: &str) -> Self {
+        self.description = description.to_string();
+        self
+    }
+
+    pub fn prompt(mut self, prompt: &str) -> Self {
+        self.prompt = prompt.to_string();
+        self
+    }
+
+    pub fn build(self, handler: ReplHandler) -> Result<Repl> {
+        Ok(Repl {
+            app_name: self.app_name,
+            description: self.description,
+            prompt: self.prompt,
+            editor: DefaultEditor::new()?,
+            handler,
+        })
     }
 }
 
@@ -256,6 +300,6 @@ impl ReplHandler {
     }
 }
 
-fn main() {
+fn main() -> Result<()> {
     todo!()
 }

@@ -54,9 +54,7 @@ pub struct LsmStorageState {
 impl LsmStorageState {
     fn create(options: &LsmStorageOptions) -> Self {
         Self {
-            // when first create, the index of the memtable is 0.
             memtable: Arc::new(MemTable::create(0)),
-            // Init the immu_memtable vector and L0_Sstable vector.
             imm_memtables: Vec::new(),
             l0_sstables: Vec::new(),
             levels: Vec::new(),
@@ -124,9 +122,7 @@ impl LsmStorageInner {
             CompactionOptions::Leveled(options) => {
                 CompactionController::Leveled(LeveledCompactionController::new(options.clone()))
             }
-            _ => {
-                todo!()
-            }
+            CompactionOptions::NoCompaction => CompactionController::None,
         };
         if !path.exists() {
             std::fs::create_dir_all(path).context("failed to create DB dir")?;
@@ -164,7 +160,6 @@ impl LsmStorageInner {
                     ManifestRecord::Compaction(task, output) => {
                         let (new_state, _) =
                             compaction_controller.apply_compaction_result(&state, &task, &output);
-                        // TODO: apply remove again
                         state = new_state;
                         next_sst_id =
                             next_sst_id.max(output.iter().max().copied().unwrap_or_default());
@@ -513,7 +508,6 @@ pub enum WriteBatchRecord<T: AsRef<[u8]>> {
 pub struct MiniLsm {
     // maintains a StorageInner inside of it.
     pub(crate) inner: Arc<LsmStorageInner>,
-    // todo : add flush thread and compaction thread.
     compaction_thread: Mutex<Option<std::thread::JoinHandle<()>>>,
     comapction_notifier: crossbeam::channel::Sender<()>,
     flush_thread: Mutex<Option<std::thread::JoinHandle<()>>>,
