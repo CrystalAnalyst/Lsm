@@ -3,14 +3,22 @@
 
 use anyhow::Result;
 use bytes::Bytes;
+use clap::{Parser, ValueEnum};
+use lsm::compact::{CompactionOptions, LeveledCompactionOptions};
 use lsm::iterators::StorageIterator;
 use lsm::key::KeySlice;
 use lsm::lsm_storage::{LsmStorageOptions, MiniLsm};
 use rustyline::DefaultEditor;
-use std::env::Args;
 use std::fmt::Write;
+use std::path::PathBuf;
 use std::sync::Arc;
 mod wrapper;
+
+#[derive(Debug, Clone, ValueEnum)]
+enum CompactionStrategy {
+    Leveled,
+    None,
+}
 
 /*
     基本的API: put, delete, get, scan
@@ -132,7 +140,7 @@ impl Command {
     }
 }
 
-/// 以后写命令行工具, 首选Repl
+/// 写命令行工具:用Repl模式
 /// Read，读取用户输入 -> Eval, 执行输入内容(放在handler里面)
 /// Print 打印输出结果 -> Loop, 不断循环以上步骤
 pub struct Repl {
@@ -300,6 +308,49 @@ impl ReplHandler {
     }
 }
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[arg(long, default_value = "lsm.db")]
+    path: PathBuf,
+    #[arg(long, default_value = "leveled")]
+    compaction: CompactionStrategy,
+    #[arg(long)]
+    enable_wal: bool,
+    #[arg(long)]
+    serializable: bool,
+}
+
 fn main() -> Result<()> {
-    todo!()
+    let args = Args::parse();
+    let lsm = MiniLsm::open(
+        args.path,
+        LsmStorageOptions {
+            block_size: 4096,
+            target_sst_size: 2 << 20, // 2MB
+            max_memtable_limit: 3,
+            compaction_options: match args.compaction {
+                CompactionStrategy::None => CompactionOptions::NoCompaction,
+                CompactionStrategy::Leveled => {
+                    CompactionOptions::Leveled(LeveledCompactionOptions {
+                        level0_file_num_compaction_trigger: 2,
+                        max_levels: 4,
+                        base_level_size_mb: 128,
+                        level_size_multiplier: 2,
+                    })
+                }
+            },
+            enable_wal: args.enable_wal,
+            serializable: args.serializable,
+        },
+    )?;
+
+    let repl = ReplBuilder::new()
+        .app_name("mini-lsm-cli")
+        .description("A CLI for mini-lsm")
+        .prompt("mini-lsm-cli> ")
+        .build(ReplHandler { epoch: 0, lsm })?;
+
+    repl.run()?;
+    Ok(())
 }

@@ -19,6 +19,7 @@ serde_json ={ version = "1.0" }
 parking_lot = "0.12"
 rustyline = "14.0.0"
 nom = "7.1.3"
+clap = {version = "4.4.17", features = ["derive"]}
 
 [[bin]]
 name = "lsm-cli"
