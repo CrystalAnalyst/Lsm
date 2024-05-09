@@ -52,6 +52,9 @@ impl Wal {
             let key = Bytes::copy_from_slice(&buf_ptr[..key_len]);
             hasher.write(&key);
             buf_ptr.advance(key_len);
+            // get the ts
+            let ts = buf_ptr.get_u64();
+            hasher.write_u64(ts);
             // get the value
             let value_len = buf_ptr.get_u16() as usize;
             hasher.write_u16(value_len as u16);
@@ -62,7 +65,7 @@ impl Wal {
             if hasher.finalize() != buf_ptr.get_u32() {
                 bail!("checksum mismatched!");
             }
-            todo!()
+            skiplist.insert(KeyBytes::from_bytes_with_ts(key, ts), value);
         }
         Ok(Self {
             file: Arc::new(Mutex::new(BufWriter::new(file))),

@@ -493,9 +493,9 @@ impl LsmStorageInner {
         Ok(())
     }
 
-    /*------------------------------Compaction Opt----------------------------------*/
     pub fn add_compaction_filter(&self, compaction_filter: CompactionFilter) {
-        todo!()
+        let mut compaction_filters = self.compaction_filters.lock();
+        compaction_filters.push(compaction_filter);
     }
 }
 
