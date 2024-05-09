@@ -197,6 +197,10 @@ impl Key<Bytes> {
     pub fn for_testing_key_ref(&self) -> &[u8] {
         self.0.as_ref()
     }
+    
+    pub fn for_testing_from_bytes_no_ts(bytes: Bytes) -> KeyBytes {
+        Key(bytes, TS_DEFAULT)
+    }
 
     pub fn ts(&self) -> u64 {
         self.1
