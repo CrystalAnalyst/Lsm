@@ -4,9 +4,10 @@
 pub mod txn;
 pub mod watermark;
 
+use crossbeam_skiplist::SkipMap;
 use std::{
     collections::{BTreeMap, HashSet},
-    sync::Arc,
+    sync::{atomic::AtomicBool, Arc},
 };
 use txn::Transaction;
 
@@ -45,8 +46,26 @@ impl LsmMvccInner {
         }
     }
 
+    /// 事务开始: 启动一个新事务的入口在mvcc模块的new_txn()函数。
+    /// 这个函数比较简单，除了初始化几个字段，唯一有行为语义的部分就是ts = self.ts.lock()这一行申请授时的地方了。
     pub fn new_txn(&self, inner: Arc<LsmStorageInner>, ser: bool) -> Arc<Transaction> {
-        todo!()
+        // 1. 申请授时
+        let mut ts = self.ts.lock();
+        let read_ts = ts.0;
+        // 2. 维护watermark
+        ts.1.add_reader(read_ts);
+        // 3. 填充事务结构体
+        Arc::new(Transaction {
+            read_ts,
+            inner,
+            local_storage: Arc::new(SkipMap::new()),
+            committed: Arc::new(AtomicBool::new(false)),
+            key_hashes: if ser {
+                Some(Mutex::new((HashSet::new(), HashSet::new())))
+            } else {
+                None
+            },
+        })
     }
 
     pub fn update_commit_ts(&self, ts: u64) {

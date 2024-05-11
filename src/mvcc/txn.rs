@@ -40,7 +40,7 @@ impl Transaction {
             let (_, read_set) = &mut *key_hash;
             read_set.insert(farmhash::hash32(key));
         }
-        // get the actual key-value pair
+        // 实际执行动作: get the actual key-value pair
         if let Some(entry) = self.local_storage.get(key) {
             if entry.value().is_empty() {
                 return Ok(None);
