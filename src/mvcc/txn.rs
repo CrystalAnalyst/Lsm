@@ -112,13 +112,16 @@ impl Transaction {
     }
 
     pub fn commit(&self) -> Result<()> {
+        // Transaction Commit Flag
         self.committed
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .expect("cannot operate on committed txn!");
+
+        // Commit Lock
         let _commit_lock = self.inner.mvcc().commit_lock.lock();
         let serializability_check;
 
-        // 1.记录读取操作：将事务中读取的键的哈希值添加到读取集中，用于后续的可串行化检查。
+        // Serializable Check
         if let Some(guard) = &self.key_hashes {
             let guard = guard.lock();
             let (write_set, read_set) = &*guard;
@@ -141,6 +144,7 @@ impl Transaction {
             serializability_check = false;
         }
 
+        // Write Batch Construction
         let batch = self
             .local_storage
             .iter()
@@ -152,8 +156,11 @@ impl Transaction {
                 }
             })
             .collect::<Vec<_>>();
+
+        // Write Batch Execution:
         let ts = self.inner.write_batch_inner(&batch)?;
 
+        // Serializability Check Update:
         if serializability_check {
             let mut committed_txns = self.inner.mvcc().committed_txns.lock();
             let mut key_hashes = self.key_hashes.as_ref().unwrap().lock();
