@@ -1,10 +1,12 @@
 use super::StorageIterator;
 use anyhow::{Ok, Result};
 
+/// merges two iterators of different types into one.
 pub struct TwoMergeIterator<A: StorageIterator, B: StorageIterator> {
     a: A,
     b: B,
-    // a flag to indicate that whether choose a or b.
+    // Determines whether to choose the key from iterator a or iterator b.
+    // It compares the keys of both iterators and returns true if a should be chosen.
     choose_a: bool,
 }
 
@@ -25,6 +27,8 @@ impl<
         Ok(iter)
     }
 
+    /// Determines whether to choose the key from iterator a or iterator b.
+    /// It compares the keys of both iterators and returns true if a should be chosen.
     fn choose_a(a: &A, b: &B) -> bool {
         if !a.is_valid() {
             return false;
@@ -37,6 +41,7 @@ impl<
         a.key() < b.key()
     }
 
+    /// Skips elements in iterator b if the current keys of both iterators are equal.
     fn skip_b(&mut self) -> Result<()> {
         if self.a.is_valid() && self.b.is_valid() && self.b.key() == self.a.key() {
             self.b.next()?;

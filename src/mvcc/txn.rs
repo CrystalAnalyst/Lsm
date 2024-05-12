@@ -1,11 +1,13 @@
 use core::borrow;
 use std::ops::Bound;
+use std::sync::atomic::Ordering;
 use std::{
     collections::HashSet,
     sync::{atomic::AtomicBool, Arc},
 };
 
 use crate::mem_table::map_bound;
+use crate::mvcc::CommittedTxnData;
 use anyhow::Result;
 use bytes::Bytes;
 use crossbeam_skiplist::map::Entry;
@@ -16,7 +18,7 @@ use parking_lot::Mutex;
 use crate::iterators::two_merge_iterator::TwoMergeIterator;
 use crate::iterators::StorageIterator;
 use crate::lsm_iterator::{FusedIterator, LsmIterator};
-use crate::lsm_storage::LsmStorageInner;
+use crate::lsm_storage::{LsmStorageInner, WriteBatchRecord};
 
 pub struct Transaction {
     pub(crate) read_ts: u64,
@@ -110,7 +112,75 @@ impl Transaction {
     }
 
     pub fn commit(&self) -> Result<()> {
-        todo!()
+        self.committed
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .expect("cannot operate on committed txn!");
+        let _commit_lock = self.inner.mvcc().commit_lock.lock();
+        let serializability_check;
+
+        // 1.记录读取操作：将事务中读取的键的哈希值添加到读取集中，用于后续的可串行化检查。
+        if let Some(guard) = &self.key_hashes {
+            let guard = guard.lock();
+            let (write_set, read_set) = &*guard;
+            println!(
+                "commit txn: write_set: {:?}, read_set: {:?}",
+                write_set, read_set
+            );
+            if !write_set.is_empty() {
+                let committed_txns = self.inner.mvcc().committed_txns.lock();
+                for (_, txn_data) in committed_txns.range((self.read_ts + 1)..) {
+                    for key_hash in read_set {
+                        if txn_data.key_hashes.contains(key_hash) {
+                            anyhow::bail!("serializable check failed");
+                        }
+                    }
+                }
+            }
+            serializability_check = true;
+        } else {
+            serializability_check = false;
+        }
+
+        let batch = self
+            .local_storage
+            .iter()
+            .map(|entry| {
+                if entry.value().is_empty() {
+                    WriteBatchRecord::Del(entry.key().clone())
+                } else {
+                    WriteBatchRecord::Put(entry.key().clone(), entry.value().clone())
+                }
+            })
+            .collect::<Vec<_>>();
+        let ts = self.inner.write_batch_inner(&batch)?;
+
+        if serializability_check {
+            let mut committed_txns = self.inner.mvcc().committed_txns.lock();
+            let mut key_hashes = self.key_hashes.as_ref().unwrap().lock();
+            let (write_set, _) = &mut *key_hashes;
+
+            let old_data = committed_txns.insert(
+                ts,
+                CommittedTxnData {
+                    key_hashes: std::mem::take(write_set),
+                    read_ts: self.read_ts,
+                    commit_ts: ts,
+                },
+            );
+            assert!(old_data.is_none());
+
+            // remove unneeded txn data
+            let watermark = self.inner.mvcc().watermark();
+            while let Some(entry) = committed_txns.first_entry() {
+                if *entry.key() < watermark {
+                    entry.remove();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

@@ -54,6 +54,7 @@ impl<I: StorageIterator> PartialEq for HeapWrapper<I> {
         self.partial_cmp(other).unwrap() == cmp::Ordering::Equal
     }
 }
+
 /// MergeIterator Merges multiple storage Iterators.
 pub struct MergeIterator<I: StorageIterator> {
     // A binaryHeap of `HeapWrapper<I>` instances.

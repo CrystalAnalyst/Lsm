@@ -98,7 +98,7 @@ impl MemTable {
         self.map.get(&key_bytes).map(|e| e.value().clone())
     }
 
-    pub fn scan(&self, lower: Bound<KeySlice>, upper: Bound<KeySlice>) -> Result<MemTableIterator> {
+    pub fn scan(&self, lower: Bound<KeySlice>, upper: Bound<KeySlice>) -> MemTableIterator {
         let (lower, upper) = (map_key_bound(lower), map_key_bound(upper));
         let mut iter = MemTableIteratorBuilder {
             map: self.map.clone(),
@@ -107,7 +107,7 @@ impl MemTable {
         }
         .build();
         iter.next().unwrap();
-        Ok(iter)
+        iter
     }
 
     pub fn put(&self, key: KeySlice, value: &[u8]) -> Result<()> {

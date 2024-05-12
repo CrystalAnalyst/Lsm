@@ -1,40 +1,44 @@
-#![allow(unused)]
+use std::ops::Bound;
 
-use std::{ops::Bound, thread::current};
-
-use anyhow::bail;
-use anyhow::Ok;
-use anyhow::Result;
+use anyhow::{bail, Result};
 use bytes::Bytes;
 
-use crate::key;
-use crate::{
-    iterators::{merge_iterator::MergeIterator, StorageIterator},
-    mem_table::MemTableIterator,
-};
+use crate::iterators::concat_iterator::SstConcatIterator;
+use crate::iterators::merge_iterator::MergeIterator;
+use crate::iterators::two_merge_iterator::TwoMergeIterator;
+use crate::iterators::StorageIterator;
+use crate::mem_table::MemTableIterator;
+use crate::table::SsTableIterator;
 
-// users should not call next(), key() and value()
-// when the iterator is invalid.
-type LsmIteratorInner = MergeIterator<MemTableIterator>;
+/// Represents the internal type for an LSM iterator.
+/// This type will be changed across the tutorial for multiple times.
+type LsmIteratorInner = TwoMergeIterator<
+    TwoMergeIterator<MergeIterator<MemTableIterator>, MergeIterator<SsTableIterator>>,
+    MergeIterator<SstConcatIterator>,
+>;
 
 pub struct LsmIterator {
-    // inner iterator, a comb of merge ieterators on various data types.
     inner: LsmIteratorInner,
-    // tracks the end bound of the iteration range.
     end_bound: Bound<Bytes>,
-    // maintains a flag.
     is_valid: bool,
+    read_ts: u64,
+    prev_key: Vec<u8>,
 }
 
 impl LsmIterator {
-    pub(crate) fn new(iter: LsmIteratorInner, end_bound: Bound<Bytes>) -> Result<Self> {
+    pub(crate) fn new(
+        iter: LsmIteratorInner,
+        end_bound: Bound<Bytes>,
+        read_ts: u64,
+    ) -> Result<Self> {
         let mut iter = Self {
             is_valid: iter.is_valid(),
             inner: iter,
             end_bound,
+            read_ts,
+            prev_key: Vec::new(),
         };
-        // move to non-delete.
-        iter.move_to_non_delete()?;
+        iter.move_to_key()?;
         Ok(iter)
     }
 
@@ -52,9 +56,31 @@ impl LsmIterator {
         Ok(())
     }
 
-    fn move_to_non_delete(&mut self) -> Result<()> {
-        while self.is_valid() && self.inner.value().is_empty() {
-            self.next_inner()?;
+    fn move_to_key(&mut self) -> Result<()> {
+        loop {
+            while self.inner.is_valid() && self.inner.key().key_ref() == self.prev_key {
+                self.next_inner()?;
+            }
+            if !self.inner.is_valid() {
+                break;
+            }
+            self.prev_key.clear();
+            self.prev_key.extend(self.inner.key().key_ref());
+            while self.inner.is_valid()
+                && self.inner.key().key_ref() == self.prev_key
+                && self.inner.key().ts() > self.read_ts
+            {
+                self.next_inner()?;
+            }
+            if !self.inner.is_valid() {
+                break;
+            }
+            if self.inner.key().key_ref() != self.prev_key {
+                continue;
+            }
+            if !self.inner.value().is_empty() {
+                break;
+            }
         }
         Ok(())
     }
@@ -75,9 +101,9 @@ impl StorageIterator for LsmIterator {
         self.inner.value()
     }
 
-    fn next(&mut self) -> anyhow::Result<()> {
+    fn next(&mut self) -> Result<()> {
         self.next_inner()?;
-        self.move_to_non_delete()?;
+        self.move_to_key()?;
         Ok(())
     }
 
@@ -86,45 +112,59 @@ impl StorageIterator for LsmIterator {
     }
 }
 
-// using FusedIterator to wraps the Iter, preventing user bad call.
+/// A wrapper around existing iterator, will prevent users from calling `next` when the iterator is
+/// invalid. If an iterator is already invalid, `next` does not do anything. If `next` returns an error,
+/// `is_valid` should return false, and `next` should always return an error.
 pub struct FusedIterator<I: StorageIterator> {
-    //trait I as the inner Type.
     iter: I,
-    // track whether an error occured during Iteration.
-    has_error: bool,
+    has_errored: bool,
+}
+
+impl<I: StorageIterator> FusedIterator<I> {
+    pub fn new(iter: I) -> Self {
+        Self {
+            iter,
+            has_errored: false,
+        }
+    }
 }
 
 impl<I: StorageIterator> StorageIterator for FusedIterator<I> {
-    type KeyType<'a> = I::KeyType<'a> where Self:'a;
+    type KeyType<'a> = I::KeyType<'a> where Self: 'a;
 
     fn is_valid(&self) -> bool {
-        !self.has_error && self.iter.is_valid()
+        !self.has_errored && self.iter.is_valid()
     }
 
     fn key(&self) -> Self::KeyType<'_> {
         if !self.is_valid() {
-            panic!("invalid access to the underlying iterator")
+            panic!("invalid access to the underlying iterator");
         }
         self.iter.key()
     }
 
     fn value(&self) -> &[u8] {
         if !self.is_valid() {
-            panic!("invalid acess to the underlying iterator")
+            panic!("invalid access to the underlying iterator");
         }
         self.iter.value()
     }
 
-    fn next(&mut self) -> anyhow::Result<()> {
-        if self.has_error {
+    fn next(&mut self) -> Result<()> {
+        // only move when the iterator is valid and not errored
+        if self.has_errored {
             bail!("the iterator is tainted");
         }
         if self.iter.is_valid() {
             if let Err(e) = self.iter.next() {
-                self.has_error = true;
+                self.has_errored = true;
                 return Err(e);
             }
         }
         Ok(())
+    }
+
+    fn number_of_iterators(&self) -> usize {
+        self.iter.number_of_iterators()
     }
 }
