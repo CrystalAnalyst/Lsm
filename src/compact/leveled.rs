@@ -72,10 +72,8 @@ impl LeveledCompactionController {
         &self,
         snapshot: &LsmStorageState,
     ) -> Option<LeveledCompactionTask> {
-        // calculate the target size
-        let mut target_level_sizes = (0..self.options.max_levels).map(|_| 0).collect::<Vec<_>>();
+        // To carry out a compaction task, we need to invesigate the current situation.
         let mut real_level_sizes = Vec::with_capacity(self.options.max_levels);
-        let mut base_level = self.options.max_levels;
         for i in 0..self.options.max_levels {
             real_level_sizes.push(
                 snapshot.levels[i]
@@ -85,7 +83,12 @@ impl LeveledCompactionController {
                     .sum::<u64>() as usize,
             );
         }
+        // Okay, Now we have every level's SSTables sizes in sum,
+        // then we've got to check sum base_Level_size(the most bottom level).
+        let mut base_level = self.options.max_levels;
         let base_level_size_bytes = self.options.base_level_size_mb * 1024 * 1024;
+        // Okay, we have base_level_size and every level's real size, now compute target size.
+        let mut target_level_sizes = (0..self.options.max_levels).map(|_| 0).collect::<Vec<_>>();
         target_level_sizes[self.options.max_levels - 1] =
             real_level_sizes[self.options.max_levels - 1].max(base_level_size_bytes);
         for level in (0..self.options.max_levels - 1).rev() {
@@ -94,12 +97,13 @@ impl LeveledCompactionController {
             if next_level_size > base_level_size_bytes {
                 target_level_sizes[level] = this_level_size;
             }
+            // Choose L0 can compact with which level.
             if target_level_sizes[level] > 0 {
                 base_level = level + 1;
             }
         }
-
         // generate compaction task for Both L0 and other levels.
+        // In my implmentation, L0 always has the highest priority.
         if snapshot.l0_sstables.len() >= self.options.level0_file_num_compaction_trigger {
             return Some(LeveledCompactionTask {
                 upper_level: None,
@@ -113,15 +117,19 @@ impl LeveledCompactionController {
                 is_lower_level_bottom_level: base_level == self.options.max_levels,
             });
         }
+        // calculate the priority among L1, L2 and other Levels.
         let mut priority = Vec::with_capacity(self.options.max_levels);
         for i in (0..self.options.max_levels) {
             let prio = real_level_sizes[i] as f64 / target_level_sizes[i] as f64;
             priority.push((prio, i + 1));
         }
+        // then sorting the prio score from large to small
         priority.sort_by(|a, b| a.partial_cmp(b).unwrap().reverse());
+        // get the first priority to compact
         let priority = priority.first();
         if let Some((_, level)) = priority {
             let level = *level;
+            // get the old SSTable in this level (upper level)
             let select_sst = snapshot.levels[level - 1].1.iter().min().copied().unwrap();
             return Some(LeveledCompactionTask {
                 upper_level: Some(level),
@@ -141,7 +149,7 @@ impl LeveledCompactionController {
         output: &[usize],
     ) -> (LsmStorageState, Vec<usize>) {
         let mut snapshot = snapshot.clone();
-        let mut files_to_remove = Vec::new();
+        // Okay, Let's carry out the real execution, first get the objects ready.
         let mut upper_level_sst_ids_set = task
             .upper_level_sst_ids
             .iter()
@@ -153,7 +161,9 @@ impl LeveledCompactionController {
             .copied()
             .collect::<HashSet<_>>();
 
+        // Now I get the resource ready, I wanna look whether it's L0-compaction or Li-compaction.
         if let Some(upper_level) = task.upper_level {
+            // this is Li-compaction
             let new_upper_level_ssts = snapshot.levels[upper_level - 1]
                 .1
                 .iter()
@@ -165,6 +175,7 @@ impl LeveledCompactionController {
                 })
                 .collect::<Vec<_>>();
         } else {
+            // this is L0-compaction
             let new_l0_ssts = snapshot
                 .l0_sstables
                 .iter()
@@ -178,9 +189,12 @@ impl LeveledCompactionController {
             snapshot.l0_sstables = new_l0_ssts;
         }
 
+        // Aha, Let's move out these out-of-date and useless stuff.
+        let mut files_to_remove = Vec::new();
         files_to_remove.extend(&task.upper_level_sst_ids);
         files_to_remove.extend(&task.lower_level_sst_ids);
 
+        // Okay, final hit: update the lower level SSTables.
         let mut new_lower_level_ssts = snapshot.levels[task.lower_level - 1]
             .1
             .iter()
@@ -191,7 +205,6 @@ impl LeveledCompactionController {
                 Some(*x)
             })
             .collect::<Vec<_>>();
-
         new_lower_level_ssts.extend(output);
         new_lower_level_ssts.sort_by(|x, y| {
             snapshot
@@ -202,6 +215,8 @@ impl LeveledCompactionController {
                 .cmp(snapshot.sstables.get(y).unwrap().first_key())
         });
         snapshot.levels[task.lower_level - 1].1 = new_lower_level_ssts;
+
+        // return the updated State and the files to move(the objects to be garbage-colletced).
         (snapshot, files_to_remove)
     }
 }

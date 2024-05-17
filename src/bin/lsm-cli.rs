@@ -19,7 +19,6 @@ enum CompactionStrategy {
     Leveled,
     None,
 }
-
 /*
     基本的API: put, delete, get, scan
     其它API: Init用于初始化(往LsmTree中填充一部分数据以操作), Flush, Compact, Dump和退出命令
@@ -322,13 +321,16 @@ struct Args {
 }
 
 fn main() -> Result<()> {
+    // 1. 捕获用户输入的参数
     let args = Args::parse();
+
+    // 2. 开机
     let lsm = MiniLsm::open(
         args.path,
         LsmStorageOptions {
-            block_size: 4096,
+            block_size: 4096,         // 4KB
             target_sst_size: 2 << 20, // 2MB
-            max_memtable_limit: 3,
+            max_memtable_limit: 3,    // 3 ~ 5 is acceptable
             compaction_options: match args.compaction {
                 CompactionStrategy::None => CompactionOptions::NoCompaction,
                 CompactionStrategy::Leveled => {
@@ -345,12 +347,13 @@ fn main() -> Result<()> {
         },
     )?;
 
+    // 3. 开启命令行
     let repl = ReplBuilder::new()
         .app_name("mini-lsm-cli")
         .description("A CLI for mini-lsm")
         .prompt("mini-lsm-cli> ")
         .build(ReplHandler { epoch: 0, lsm })?;
-
     repl.run()?;
+
     Ok(())
 }

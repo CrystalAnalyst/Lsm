@@ -43,11 +43,13 @@ pub struct LsmStorageState {
     pub memtable: Arc<MemTable>,
     // immutable_memtable for flush to the disk (A vector of)
     pub imm_memtables: Vec<Arc<MemTable>>,
-    // the L0_SsTables stored in the disk.
+    // the L0_SsTables stored in the disk, using `usize` to represents SSTable ID.
     pub l0_sstables: Vec<usize>,
     // SSTables sorted by key-range : L1(index:0) ~ Lmax for compaction
     pub levels: Vec<(usize, Vec<usize>)>,
     // SST objects : map index(usize) to SST Object(Arc<SsTable>)
+    // I made every SSTable a ID, then use a vector of IDs to represents SSTables in one Level.
+    // The smaller ID it is, then earlier it creates.
     pub sstables: HashMap<usize, Arc<SsTable>>,
 }
 
