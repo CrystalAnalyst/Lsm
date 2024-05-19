@@ -48,7 +48,7 @@
 3. 后台线程会定期轮询, 是否当前MemTable容量满, 如果是则触发Frozen以及Flush。
 4. 后台线程会定期进行Compact, 将处在上层的SSTable不断往下压, 用来保持LSM-Tree的形态。
 
-## 设计(未完)
+## 设计(to be continued..)
 
 ### 第一部分：提供基本CURD功能的存储引擎
 
