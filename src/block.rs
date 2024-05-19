@@ -1,8 +1,3 @@
-#![allow(unused_variables)]
-#![allow(dead_code)]
-#![allow(unused_mut)]
-#![allow(unused_imports)]
-
 use bytes::{Buf, BufMut, Bytes};
 pub mod builder;
 pub mod iterator;
@@ -15,6 +10,7 @@ pub struct Block {
 }
 
 impl Block {
+    /// Block = entries + offset of each enry + #entries.
     pub fn encode(&self) -> Bytes {
         let mut buf = self.data.clone();
         let offsets_len = self.offsets.len();

@@ -1,7 +1,6 @@
-#![allow(unused)]
 use bytes::Buf;
 
-use crate::key::{Key, KeySlice, KeyVec};
+use crate::key::{KeySlice, KeyVec};
 use std::sync::Arc;
 
 use super::{Block, SIZEOF_U16};
