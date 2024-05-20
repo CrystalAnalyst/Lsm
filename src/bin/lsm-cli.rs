@@ -1,12 +1,8 @@
-#![allow(unused)]
-#![allow(dead_code)]
-
 use anyhow::Result;
 use bytes::Bytes;
 use clap::{Parser, ValueEnum};
 use lsm::compact::{CompactionOptions, LeveledCompactionOptions};
 use lsm::iterators::StorageIterator;
-use lsm::key::KeySlice;
 use lsm::lsm_storage::{LsmStorageOptions, MiniLsm};
 use rustyline::DefaultEditor;
 use std::fmt::Write;
@@ -143,7 +139,9 @@ impl Command {
 /// Read，读取用户输入 -> Eval, 执行输入内容(放在handler里面)
 /// Print 打印输出结果 -> Loop, 不断循环以上步骤
 pub struct Repl {
+    #[allow(dead_code)]
     app_name: String,
+    #[allow(dead_code)]
     description: String,
     prompt: String,
     editor: DefaultEditor,
@@ -162,7 +160,7 @@ impl Repl {
             // 把Input解析成固定格式的命令
             let command = Command::parse(&input)?;
             // 调用.handle()方法进行处理. repeat
-            self.handler.handle(&command);
+            _ = self.handler.handle(&command);
         }
     }
 }
@@ -248,7 +246,7 @@ impl ReplHandler {
             }
 
             Command::Del { key } => {
-                self.lsm.del(key.as_bytes())?;
+                self.lsm.delete(key.as_bytes())?;
                 println!("{} deleted", key);
             }
 
@@ -330,7 +328,7 @@ fn main() -> Result<()> {
         LsmStorageOptions {
             block_size: 4096,         // 4KB
             target_sst_size: 2 << 20, // 2MB
-            max_memtable_limit: 3,    // 3 ~ 5 is acceptable
+            num_memtable_limit: 3,    // 3 ~ 5 is acceptable
             compaction_options: match args.compaction {
                 CompactionStrategy::None => CompactionOptions::NoCompaction,
                 CompactionStrategy::Leveled => {

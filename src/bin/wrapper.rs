@@ -1,3 +1,4 @@
+#[allow(unused)]
 pub mod lsm_wrapper {
     pub use lsm::*;
 }
