@@ -1,8 +1,8 @@
 use anyhow::{Ok, Result};
 
 use crate::key::KeySlice;
-use crate::table::iterator::SsTableIterator;
 use crate::table::SsTable;
+use crate::table::SsTableIterator;
 
 use std::sync::Arc;
 

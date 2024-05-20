@@ -121,4 +121,9 @@ impl SsTableBuilder {
         self.data.extend(encoded_block);
         self.data.put_u32(checksum);
     }
+
+    #[cfg(test)]
+    pub(crate) fn build_for_test(self, path: impl AsRef<Path>) -> Result<SsTable> {
+        self.build(0, None, path)
+    }
 }

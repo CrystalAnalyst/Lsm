@@ -1,7 +1,7 @@
 #![allow(unused)]
 pub(crate) mod bloom;
-pub(crate) mod builder;
-pub mod iterator;
+mod builder;
+mod iterator;
 
 use self::bloom::Bloom;
 pub use self::builder::SsTableBuilder;

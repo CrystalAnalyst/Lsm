@@ -19,7 +19,7 @@ use crate::{
         txn::{Transaction, TxnIterator},
         LsmMvccInner,
     },
-    table::{iterator::SsTableIterator, FileObject, SsTable, SsTableBuilder},
+    table::{FileObject, SsTable, SsTableBuilder, SsTableIterator},
 };
 use std::{
     collections::{BTreeSet, HashMap},
@@ -71,13 +71,61 @@ pub struct LsmStorageOptions {
     // configure the one SSTable/MemTable size.
     pub target_sst_size: usize,
     // configure the max number of memtables(Imms + 1).
-    pub max_memtable_limit: usize,
+    pub num_memtable_limit: usize,
     // Compaction option
     pub compaction_options: CompactionOptions,
     // serilization or not
     // open WAL or not
     pub enable_wal: bool,
     pub serializable: bool,
+}
+
+impl Default for LsmStorageOptions {
+    fn default() -> Self {
+        Self {
+            block_size: 4 * 1024,
+            target_sst_size: 1 << 20,
+            compaction_options: CompactionOptions::NoCompaction,
+            enable_wal: false,
+            num_memtable_limit: 3,
+            serializable: false,
+        }
+    }
+}
+
+impl LsmStorageOptions {
+    pub fn default_for_week1_test() -> Self {
+        Self {
+            block_size: 4096,
+            target_sst_size: 2 << 20,
+            compaction_options: CompactionOptions::NoCompaction,
+            enable_wal: false,
+            num_memtable_limit: 50,
+            serializable: false,
+        }
+    }
+
+    pub fn default_for_week1_day6_test() -> Self {
+        Self {
+            block_size: 4096,
+            target_sst_size: 2 << 20,
+            compaction_options: CompactionOptions::NoCompaction,
+            enable_wal: false,
+            num_memtable_limit: 2,
+            serializable: false,
+        }
+    }
+
+    pub fn default_for_week2_test(compaction_options: CompactionOptions) -> Self {
+        Self {
+            block_size: 4096,
+            target_sst_size: 1 << 20, // 1MB
+            compaction_options,
+            enable_wal: false,
+            num_memtable_limit: 2,
+            serializable: false,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -808,7 +856,7 @@ impl MiniLsm {
         self.inner.put(key, value)
     }
 
-    pub fn del(&self, key: &[u8]) -> Result<()> {
+    pub fn delete(&self, key: &[u8]) -> Result<()> {
         self.inner.delete(key)
     }
 
@@ -829,7 +877,7 @@ impl MiniLsm {
     }
 
     pub fn compact(&self) -> Result<()> {
-        self.inner.force_compact()
+        self.inner.force_full_compaction()
     }
 
     pub fn add_compaction_filter(&self, compaction_filter: CompactionFilter) {
@@ -838,5 +886,22 @@ impl MiniLsm {
 
     pub fn sync(&self) -> Result<()> {
         self.inner.sync()
+    }
+
+    /*-----------------Tesing usage-----------------------*/
+    /// Only call this in test cases due to race conditions
+    pub fn force_flush(&self) -> Result<()> {
+        if !self.inner.state.read().memtable.is_empty() {
+            self.inner
+                .force_freeze_memtable(&self.inner.state_lock.lock())?;
+        }
+        if !self.inner.state.read().imm_memtables.is_empty() {
+            self.inner.force_flush_next_imm_memtable()?;
+        }
+        Ok(())
+    }
+
+    pub fn force_full_compaction(&self) -> Result<()> {
+        self.inner.force_full_compaction()
     }
 }

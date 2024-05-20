@@ -88,7 +88,7 @@ impl LsmStorageInner {
 
     /// initiates a full compaction process, which involves merging
     /// all SSTables from the L0 and L1 levels into new SSTables.
-    pub fn force_compact(&self) -> Result<()> {
+    pub fn force_full_compaction(&self) -> Result<()> {
         // step1. pre-flight check and get resource ready
         let CompactionOptions::NoCompaction = self.options.compaction_options else {
             panic!("full compaction can only be called with compaction is not enabled")
@@ -106,7 +106,7 @@ impl LsmStorageInner {
             l1_sstables: l1_sstables.clone(),
         };
         println!("force full compaction: {:?}", compaction_task);
-        let sstables = self.compact_inner(&compaction_task)?;
+        let sstables = self.compact(&compaction_task)?;
 
         // step3. finish touches (update state, make records, persistence etc)
         let mut ids = Vec::with_capacity(sstables.len());
@@ -147,7 +147,7 @@ impl LsmStorageInner {
         Ok(())
     }
 
-    fn compact_inner(&self, task: &CompactionTask) -> Result<Vec<Arc<SsTable>>> {
+    fn compact(&self, task: &CompactionTask) -> Result<Vec<Arc<SsTable>>> {
         let snapshot = {
             let state = self.state.read();
             state.clone()
@@ -352,9 +352,9 @@ impl LsmStorageInner {
         };
         self.dump_structure();
         println!("running compaction task: {:?}", task);
-        // Executes the compaction task by calling the compact_inner function,
+        // Executes the compaction task by calling the compact function,
         // which compacts the data according to the task.
-        let sstables = self.compact_inner(&task)?;
+        let sstables = self.compact(&task)?;
         // Updates the state by applying the compaction result and synchronizing the directory.
         let output = sstables.iter().map(|x| x.sst_id()).collect::<Vec<_>>();
         // Removes old SSTables that were replaced during compaction and synchronizes the directory again for cleanup.
@@ -423,7 +423,7 @@ impl LsmStorageInner {
     fn trigger_flush(&self) -> Result<()> {
         let cond = {
             let state = self.state.read();
-            state.imm_memtables.len() >= self.options.max_memtable_limit
+            state.imm_memtables.len() >= self.options.num_memtable_limit
         };
         if cond {
             self.force_flush_next_imm_memtable()?;
