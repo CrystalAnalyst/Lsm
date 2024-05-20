@@ -1,6 +1,4 @@
 #![allow(unused)]
-#![allow(dead_code)]
-
 use anyhow::{Context, Result};
 use bytes::Bytes;
 use parking_lot::{Mutex, MutexGuard, RwLock};

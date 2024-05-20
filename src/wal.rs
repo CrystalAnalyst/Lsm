@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use std::{
     fs::{File, OpenOptions},
     hash::Hasher,
@@ -42,7 +40,7 @@ impl Wal {
             .open(path)
             .context("failed to open the wal")?;
         let mut buf = Vec::new();
-        file.read_to_end(&mut buf);
+        _ = file.read_to_end(&mut buf);
         let mut buf_ptr = &buf[..];
         while buf_ptr.has_remaining() {
             let mut hasher = crc32fast::Hasher::new();
